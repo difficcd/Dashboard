@@ -194,7 +194,14 @@ def create_dash_app():
             "position": "absolute",
             "top": "20px",
             "left": "20px",
-            "zIndex": "10"
+            "zIndex": "10",
+            "backgroundColor": "transparent",
+            "border": "2px solid #e0e0e0",
+            "color": "#999999",
+            "borderRadius": "10px",  # ← ✅ 테두리 둥글게
+            "fontWeight": "bold",
+            "cursor": "pointer",
+            "fontFamily": '"Roboto-Bold", sans-serif'  # ✅ 여기!
         }),
         dcc.Loading(
             id="loading",
