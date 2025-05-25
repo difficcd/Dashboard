@@ -19,6 +19,15 @@
   left: 41px;
   top: 324px;
 }
+#year-select {
+  font-size: 20px;
+  background-size: 10px; /* 화살표 크기 */
+  background-position: right 5px center;
+  background-repeat: no-repeat;
+  appearance: none; /* 기본 화살표 제거 */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
 .frame-33 {
   width: 562px;
   height: 33px;
@@ -1793,6 +1802,7 @@
   gap: 9px;
   align-items: center;
   justify-content: flex-start;
+  margin-left: -20px; /* 원하는 만큼 조정 */
   width: 262.96px;
   height: 26.21px;
   position: absolute;
@@ -1800,25 +1810,24 @@
   top: 14px;
 }
 .line-6 {
-  margin-top: -4px;
-  border-style: solid;
-  border-color: var(--separator-light-default, #ece9f1);
-  border-width: 4px 0 0 0;
-  flex-shrink: 0;
-  width: 61px;
-  height: 0px;
-  position: relative;
-  transform-origin: 0 0;
-  transform: rotate(180deg) scale(1, 1);
+  margin-top: 3px;
+  margin-right: 10px;
+  width: 70px; /* 원하는 길이로 조절 */
+  height: 4px;  /* 선의 두께 */
+  background-color: #ece9f1; /* 옅은 보라색 */
+  border-radius: 4px; /* 둥글게 처리 */
+  flex-shrink: 0; /* flex 레이아웃에서 줄어들지 않도록 */
 }
 .select-year {
+  margin-right: 5px;
   color: #5d6dab;
   text-align: left;
   font-family: "Inter-Regular", sans-serif;
   font-size: 12px;
   line-height: 20px;
-  font-weight: 400;
+  font-weight: 600;
   position: relative;
+  white-space: nowrap; /* 줄 바꿈 방지 */
 }
 .frame-312 {
   background: var(--grey-white, #ffffff);
@@ -1835,15 +1844,6 @@
   flex-shrink: 0;
   position: relative;
   overflow: hidden;
-}
-._2024 {
-  color: var(--light-black, #11263c);
-  text-align: left;
-  font-family: "Poppins-Regular", sans-serif;
-  font-size: 20px;
-  line-height: 22px;
-  font-weight: 400;
-  position: relative;
 }
 .feather-icon-calendar {
   flex-shrink: 0;
@@ -1884,58 +1884,6 @@
   width: 34px;
   height: 207.95px;
   position: static;
-}
-._15000 {
-  color: var(--grey-40, #a2a3a5);
-  text-align: left;
-  font-family: "Poppins-Bold", sans-serif;
-  font-size: 8px;
-  line-height: 22px;
-  font-weight: 700;
-  position: absolute;
-  left: 0px;
-  top: calc(50% - 80.65px);
-  width: 34px;
-  height: 19.22px;
-}
-._6000 {
-  color: var(--grey-40, #a2a3a5);
-  text-align: left;
-  font-family: "Poppins-Bold", sans-serif;
-  font-size: 8px;
-  line-height: 22px;
-  font-weight: 700;
-  position: absolute;
-  left: 0px;
-  top: calc(50% - 17.74px);
-  width: 33.11px;
-  height: 19.22px;
-}
-._3000 {
-  color: var(--grey-40, #a2a3a5);
-  text-align: left;
-  font-family: "Poppins-Bold", sans-serif;
-  font-size: 8px;
-  line-height: 22px;
-  font-weight: 700;
-  position: absolute;
-  left: 0px;
-  top: calc(50% - -45.17px);
-  width: 31.32px;
-  height: 19.22px;
-}
-._0 {
-  color: var(--grey-40, #a2a3a5);
-  text-align: left;
-  font-family: "Poppins-Bold", sans-serif;
-  font-size: 8px;
-  line-height: 22px;
-  font-weight: 700;
-  position: absolute;
-  left: 0px;
-  top: calc(50% - -108.08px);
-  width: 31.32px;
-  height: 19.22px;
 }
 .group-2 {
   width: 595.61px;
