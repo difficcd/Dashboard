@@ -4,8 +4,8 @@ import plotly.graph_objects as go
 import urllib.request
 import urllib.parse
 import json
-import random
 import time
+import threading
 from collections import defaultdict
 from urllib.parse import parse_qs, urlparse
 
@@ -13,17 +13,28 @@ API_KEY = "68da180a494a4cc3b8add2071dc95242"
 DEFAULT_AGES = [20, 21, 22]
 P_SIZE = 1000
 
+cancel_flag = threading.Event() # 상태 저장 변수
+running_flag = threading.Event()  # 현재 작업 실행 중 여부
+
+last_ages = None  # 전역 변수로 이동
 
 def get_committee_counts_and_total(ages=DEFAULT_AGES):
     endpoint = "https://open.assembly.go.kr/portal/openapi/TVBPMBILL11"
+
+    running_flag.set()  # 작업 시작
     committee_counts = defaultdict(int)
     total_count = 0
 
     for age in ages:
         print(f"\n[START] AGE={age}")
         page = 1
-
         while True:
+            # 중단 요청 시 종료
+            if cancel_flag.is_set():
+                print(f"[CANCELLED] AGE={age} PAGE={page}")
+                running_flag.clear()
+                return {}, 0
+
             params = {
                 "KEY": API_KEY,
                 "Type": "json",
@@ -67,6 +78,7 @@ def get_committee_counts_and_total(ages=DEFAULT_AGES):
 
     print(f"\n[COMPLETE] Total count for AGES {ages}: {total_count}")
     print(f"[Committee Counts]: {dict(committee_counts)}")
+    running_flag.clear()  # 작업 끝
     return dict(committee_counts), total_count
 
 def create_figure(committee_counts, total_count, top_n=15):
@@ -90,7 +102,7 @@ def create_figure(committee_counts, total_count, top_n=15):
         go.Bar(
             x=top_labels,
             y=top_percentages,
-            marker=dict(color="#818DE5"),
+            marker=dict(color="#FFFFFF"),
             width=0.55,
             text=[f"{p:.1f}%" for p in top_percentages],
             textposition='outside',
@@ -121,40 +133,39 @@ def create_Cdash_app():
     app = Dash(__name__, requests_pathname_prefix='/dash2/', suppress_callback_exceptions=True)
     app.enable_dev_tools(debug=True, dev_tools_ui=True, dev_tools_props_check=True)
 
-    # 현재 처리 중인 rid를 저장하는 전역 변수
-    last_ages = None 
-
     @app.callback(
-    Output('graph', 'figure'),
-    Input('url', 'href')
+        Output('graph', 'figure'),
+        Input('url', 'search')
     )
-    def update_graph(href):
-        nonlocal last_ages
-
-        print(f"\n[CALLBACK] href={href}")
+    def update_graph(search):
+        global last_ages  # 전역 변수 사용
+        print(f"\n[CALLBACK TRIGGERED] search={search}")
+        if not search:
+            raise PreventUpdate
 
         try:
-            query = parse_qs(urlparse(href).query)
-            age_list = [int(age) for age in query.get("age", DEFAULT_AGES)]
-            print(f"[Parsed age_list from href] {age_list}")
+            query = parse_qs(search[1:])
+            print(f"[PARSED QUERY] {query}")
+            age_list = [int(age) for age in query.get("age", [])]
+            print(f"[AGE LIST] {age_list}")
         except Exception as e:
-            print(f"[Error parsing URL] {e}")
+            print(f"[ERROR PARSING] {e}")
             age_list = DEFAULT_AGES
 
-        # 정렬해서 비교 (순서가 다를 수 있으므로)
         age_list_sorted = sorted(age_list)
-        last_ages_sorted = sorted(last_ages) if last_ages else None
-
-        # 변경된 경우에만 갱신
-        if age_list_sorted != last_ages_sorted:
-            print(f"[UPDATE] Detected new AGE: {age_list_sorted}")
+        if last_ages is None or age_list_sorted != last_ages:
             last_ages = age_list_sorted
+
+            cancel_flag.set()
+            while running_flag.is_set():
+                time.sleep(0.05)
+            cancel_flag.clear()
+
             committee_counts, total_count = get_committee_counts_and_total(age_list_sorted)
             return create_figure(committee_counts, total_count)
-        else:
-            print(f"[SKIP] AGE unchanged: {age_list_sorted}")
-            raise PreventUpdate  # 그래프 갱신 생략
-    
+
+        print("기존 대수와 동일 → PreventUpdate")
+        raise PreventUpdate
 
     app.layout = html.Div([
         dcc.Location(id='url', refresh=False),
