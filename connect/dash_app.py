@@ -11,7 +11,9 @@ from datetime import datetime
 from datetime import timedelta
 import numpy as np
 from scipy.interpolate import make_interp_spline
+from datetime import date
 import time
+
 
 
 
@@ -101,73 +103,121 @@ def group_bills_by_month(bills, target_year):
 
 # 그래프 생성 함수
 def create_figure(all_data, target_year):
-    month_labels = [f"{target_year}-{str(m+1).zfill(2)}" for m in range(12)]
+    today = date.today()
+    last_month = today.month if target_year == today.year else 12
+
     fig = go.Figure()
+    added_any_trace = False  # 유효한 데이터가 있는지 확인
 
     for age, data in all_data.items():
-        monthly_data = {k: v for k, v in data.items() if k.startswith(str(target_year))}
-        if not monthly_data:
-            continue
+        start_date, end_date = AGE_DATE_MAP.get(age, (None, None))
+        start_month = 1
+        end_month = last_month
 
-        sorted_items = sorted(monthly_data.items())
-        x_labels = [item[0] for item in sorted_items]
-        y = [item[1] for item in sorted_items]
-        x = [month_labels.index(label) for label in x_labels if label in month_labels]
+        if start_date:
+            if start_date.year > target_year:
+                continue
+            elif start_date.year == target_year:
+                start_month = start_date.month
 
-        if len(x) >= 4:
+        if end_date:
+            if end_date.year < target_year:
+                continue
+            elif end_date.year == target_year:
+                end_month = end_date.month
+
+        # 유효 월 범위
+        x_all = list(range(start_month - 1, end_month))
+
+        # 누락 월 0 보정
+        filled_data = defaultdict(int, data)
+        for month_idx in x_all:
+            ym = f"{target_year}-{month_idx + 1:02d}"
+            _ = filled_data[ym]  # 접근만 해도 0으로 초기화됨
+
+        y_all = [filled_data[f"{target_year}-{month_idx + 1:02d}"] for month_idx in x_all]
+
+        if not x_all or not y_all or sum(y_all) == 0:
+            continue  # 아무 값도 없으면 제외
+
+        added_any_trace = True
+
+        if len(set(y_all)) > 1 and len(x_all) >= 4:
             try:
-                x_smooth = np.linspace(min(x), max(x), 300)
-                spline = make_interp_spline(x, y, k=3)
+                x_smooth = np.linspace(min(x_all), max(x_all), 300)
+                spline = make_interp_spline(x_all, y_all, k=3)
                 y_smooth = spline(x_smooth)
+
                 fig.add_trace(go.Scatter(
-                    x=[f"{(int(i)+1):02d}월" for i in x_smooth],
-                    y=y_smooth,
-                    mode='lines',
+                    x=x_smooth, y=y_smooth,
+                    mode="lines",
+                    line=dict(width=3, color="#4b65a2"),
                     name=f"{age}대 국회",
-                    line=dict(width=3, color="#485CA3") 
+                    hoverinfo="skip"
                 ))
-            except:
                 fig.add_trace(go.Scatter(
-                    x=[f"{x_+1}월" for x_ in x],
-                    y=y,
-                    mode='lines+markers',
+                    x=x_all, y=y_all,
+                    mode="markers",
+                    marker=dict(color="#4b65a2", size=8),
+                    showlegend=False
+                ))
+            except Exception:
+                fig.add_trace(go.Scatter(
+                    x=x_all, y=y_all,
+                    mode="lines+markers",
                     name=f"{age}대 국회",
-                    line=dict(color="#485CA3")  
+                    line=dict(color="#4b65a2")
                 ))
         else:
             fig.add_trace(go.Scatter(
-                x=[f"{x_+1}월" for x_ in x],
-                y=y,
-                mode='lines+markers',
+                x=x_all, y=y_all,
+                mode="lines+markers",
                 name=f"{age}대 국회",
-                line=dict(color="#485CA3")  
+                line=dict(color="#4b65a2")
             ))
 
-    # 회기 시작선 표시
+    # 대수 시작점 표시
+    ymax = max((max(d.values() or [0]) for d in all_data.values()), default=0) * 0.95
     for age, (start_date, _) in AGE_DATE_MAP.items():
         if start_date.year == target_year:
             month_idx = start_date.month - 1
-            fig.add_vline(x=f"{month_idx+1:02d}월", line_dash="dash", line_color="gray")
-            fig.add_annotation(
-                x=f"{month_idx+1:02d}월",
-                y=max(max(data.values(), default=0) for data in all_data.values()) * 0.95,
-                text=f"{age}대 ({start_date.strftime('%m/%d')})",
-                showarrow=False,
-                font=dict(color="gray")
-            )
+            if month_idx < last_month:
+                fig.add_vline(x=month_idx, line_dash="dash", line_color="gray")
+                fig.add_annotation(
+                    x=month_idx, y=ymax,
+                    text=f"{age}대 ({start_date.strftime('%m/%d')})",
+                    showarrow=False,
+                    font=dict(color="gray")
+                )
 
-    # 최종 레이아웃 설정 (소수점 제거 포함)
-    fig.update_layout(
-        title=f"{target_year}년 월별 국회 법안 발의 추이",
-        xaxis_title="월",
-        yaxis_title="발의 건수",
-        template=None,
-        hovermode="x unified",
-        yaxis=dict(tickformat=".0f", rangemode="tozero"),
-        xaxis=dict(rangemode="normal")
-    )
+    if not added_any_trace:
+        fig.update_layout(
+            title=f"{target_year}년 월별 국회 법안 발의건수 (데이터 없음)",
+            xaxis=dict(visible=False),
+            yaxis=dict(visible=False)
+        )
+    else:
+        fig.update_layout(
+            title=f"{target_year}년 월별 국회 법안 발의건수",
+            yaxis_title="발의 건수",
+            hovermode="x unified",
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+            yaxis=dict(tickformat=".0f", rangemode="tozero"),
+            xaxis=dict(
+                tickmode="array",
+                tickvals=list(range(last_month)),
+                ticktext=[f"{i+1:02d}월" for i in range(last_month)],
+                rangemode="normal"
+            )
+        )
 
     return fig
+
+
+
+
+
 
 
 # 임베드 준비 app 생성
