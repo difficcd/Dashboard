@@ -10,7 +10,7 @@ plotly graphic library & FastAPI
 dash_app 에서 생성된 그래프를 app 형식으로 html 삽입 (iframe) 
 
 
-# 문제 해결 memo
+* 문제 해결 memo
 
 위원회 비율 그래프 대수 갱신 문제 => 기능 치명적 결함
 월별 법안 발의개수 2020년 데이터 공백 처리 문제 => 처리 로직 필요
