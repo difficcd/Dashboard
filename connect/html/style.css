@@ -28,6 +28,22 @@
   -webkit-appearance: none;
   -moz-appearance: none;
 }
+
+.age-select a {
+  margin: 0 3px;
+  font-size: 12px;
+  appearance: none; /* 기본 화살표 제거 */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  font-weight: 500; 
+  color: #2d2d2d; /* 원하는 색상으로 변경 */
+  text-decoration: none; /* 밑줄 제거 (선택 사항) */
+}
+
+.age-select a:hover {
+  color: #3e64b8; /* 마우스 오버 시 색상 변경 (선택 사항) */
+}
+
 .frame-33 {
   width: 562px;
   height: 33px;
@@ -50,10 +66,13 @@
   top: -38px;
 }
 .div3 {
-  width: 710px;
-  height: 262px;
-  position: static;
+  margin-top: 30px;
+  transform: translateX(788px);
+  position: relative;
+  width: 647.96px;
+  height: 277.22px;
 }
+
 .div4 {
   padding: 32px 16px 12px 16px;
   display: flex;
@@ -1809,6 +1828,20 @@
   left: 385px;
   top: 14px;
 }
+.frame-40 {
+  display: flex;
+  flex-direction: row;
+  gap: 9px;
+  align-items: center;
+  justify-content: flex-start;
+  margin-left: 45px; 
+  width: 262.96px;
+  height: 26.21px;
+  position: absolute;
+  left: 405px;
+  top: -33px;
+}
+
 .line-6 {
   margin-top: 3px;
   margin-right: 10px;
@@ -1823,7 +1856,7 @@
   color: #5d6dab;
   text-align: left;
   font-family: "Inter-Regular", sans-serif;
-  font-size: 12px;
+  font-size: 10px;
   line-height: 20px;
   font-weight: 600;
   position: relative;
@@ -1836,6 +1869,24 @@
   border-color: var(--separator-light-default, #ece9f1);
   border-width: 4px;
   padding: 4px 10px 4px 10px;
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-start;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+.frame-20 {
+  background: var(--grey-white, #ffffff);
+  height: 30px;
+  margin-bottom: 70px;
+  border-radius: 4px;
+  border-style: solid;
+  border-color: var(--separator-light-default, #ece9f1);
+  border-width: 2px;
+  padding: 2px 2px 4px 2px;
   display: flex;
   flex-direction: row;
   gap: 10px;
@@ -1866,6 +1917,12 @@
   overflow: hidden;
 }
 .group-5 {
+  width: 642.35px;
+  height: 243.22px;
+  position: static;
+}
+.group-7 {
+  margin-top: 70px;
   width: 642.35px;
   height: 243.22px;
   position: static;
@@ -3059,6 +3116,9 @@
   font-weight: 400;
   position: relative;
 }
+.modebar {
+    top: 40px !important;  /* 기존보다 아래로 내림 */
+}
 .div86 {
   color: #828282;
   text-align: left;
@@ -3067,13 +3127,14 @@
   line-height: var(--small-text-line-height, 150%);
   font-weight: var(--small-text-font-weight, 700);
   position: absolute;
-  left: 1036px;
-  top: 783px;
+  left: 1020px;
+  top: 792px;
+  font-size: 16px;
   width: 213px;
   height: 26px;
 }
-._18-20-3-58-493-55876 {
-  color: #828282;
+._18-20-3-58-493-55876 { /* 법안제출건수 비율 상세설명 그거*/
+  color: #828282; 
   text-align: left;
   font-family: "Inter-Bold", sans-serif;
   font-size: 11px;
