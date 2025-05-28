@@ -8,7 +8,7 @@ import time
 import threading
 from collections import defaultdict
 from urllib.parse import parse_qs
-from dbmanage import load_from_db, save_to_db # DB 관리 모듈 
+from dbmanage import load_from_db, save_to_db
 
 API_KEY = "68da180a494a4cc3b8add2071dc95242"
 DEFAULT_AGES = [20, 21, 22]
@@ -92,9 +92,9 @@ def get_committee_counts_and_total(ages=DEFAULT_AGES):
         return dict(committee_counts), total_count
 
     finally:
-        running_flag.clear()  #  무조건 실행되도록 finally에서 처리
+        running_flag.clear()  # ✅ 무조건 실행되도록 finally에서 처리
 
-        
+
 
 def create_figure(committee_counts, total_count, top_n=15):
     print(f"\n[Create Figure] Total Count: {total_count}")
@@ -157,21 +157,39 @@ def create_Cdash_app():
         Input('url', 'search')
     )
     def update_graph(search):
-        global last_ages  # 전역 변수 사용
+        global last_ages
+        last_ages = None 
         print(f"\n[CALLBACK TRIGGERED] search={search}")
+        
         if not search:
-            raise PreventUpdate
-
-        try:
-            query = parse_qs(search[1:])
-            print(f"[PARSED QUERY] {query}")
-            age_list = [int(age) for age in query.get("age", [])]
-            print(f"[AGE LIST] {age_list}")
-        except Exception as e:
-            print(f"[ERROR PARSING] {e}")
+            print("[NO SEARCH PARAM] → default 사용")
             age_list = DEFAULT_AGES
+        else:
+            try:
+                query = parse_qs(search[1:])
+                print(f"[PARSED QUERY] {query}")
+                age_list = [int(age) for age in query.get("age", [])]
+                if not age_list:
+                    age_list = DEFAULT_AGES
+            except Exception as e:
+                print(f"[ERROR PARSING] {e}")
+                age_list = DEFAULT_AGES
 
         age_list_sorted = sorted(age_list)
+        
+        # 항상 DB 먼저 시도
+        committee_counts, total_count = load_from_db(age_list_sorted)
+        if total_count > 0:
+            print("[DB LOAD SUCCESS]")
+            if last_ages is None or age_list_sorted != last_ages:
+                last_ages = age_list_sorted
+                return create_figure(committee_counts, total_count)
+            else:
+                print("기존 대수와 동일 + DB 있음 → PreventUpdate")
+                raise PreventUpdate
+
+        #  DB에 없을 경우: API 호출
+        print("[NO DATA FROM DB] → API 호출")
         if last_ages is None or age_list_sorted != last_ages:
             last_ages = age_list_sorted
 
@@ -183,8 +201,9 @@ def create_Cdash_app():
             committee_counts, total_count = get_committee_counts_and_total(age_list_sorted)
             return create_figure(committee_counts, total_count)
 
-        print("기존 대수와 동일 → PreventUpdate")
+        print("기존 대수와 동일 + DB 없음 → PreventUpdate")
         raise PreventUpdate
+
 
     app.layout = html.Div([
         dcc.Location(id='url', refresh=False),
@@ -196,7 +215,7 @@ def create_Cdash_app():
                 children=[
                     dcc.Graph(
                         id="graph",
-                        style={"height": "280px"}
+                        style={"height": "270px"}
                     )
                 ]
             )
