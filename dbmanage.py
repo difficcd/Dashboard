@@ -51,7 +51,7 @@ def save_to_db(committee_counts, age):
 
 
 # 조회
-def load_from_db(ages, max_age_minutes=30):
+def load_from_db(ages, max_age_minutes=30000000000):
     now = datetime.now()
     result = defaultdict(int)
     total = 0
