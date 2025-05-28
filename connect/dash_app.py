@@ -21,7 +21,7 @@ import time
 API_KEY = "68da180a494a4cc3b8add2071dc95242"
 AGE_DATE_MAP = {
     20: (datetime(2016, 5, 30), datetime(2020, 5, 29)),
-    21: (datetime(2020, 7, 16), datetime(2024, 5, 29)),
+    21: (datetime(2020, 5, 30), datetime(2024, 5, 29)),  # 실제로는 7.16
     22: (datetime(2024, 5, 30), datetime(2028, 5, 29)),  # 추정
 }
 
@@ -159,21 +159,25 @@ def create_figure(all_data, target_year):
                     x=x_all, y=y_all,
                     mode="markers",
                     marker=dict(color="#4b65a2", size=8),
-                    showlegend=False
+                    showlegend=False,
+                    name=f"{age}대 국회"
                 ))
             except Exception:
                 fig.add_trace(go.Scatter(
                     x=x_all, y=y_all,
                     mode="lines+markers",
                     name=f"{age}대 국회",
-                    line=dict(color="#4b65a2")
+                    line=dict(color="#4b65a2"),
+                    hovertemplate=f"{age}대 국회: %{{y:.0f}}건<extra></extra>"
+
                 ))
         else:
             fig.add_trace(go.Scatter(
                 x=x_all, y=y_all,
                 mode="lines+markers",
                 name=f"{age}대 국회",
-                line=dict(color="#4b65a2")
+                line=dict(color="#4b65a2"),
+                hovertemplate=f"{age}대 국회: %{{y:.0f}}건<extra></extra>"
             ))
 
     # 대수 시작점 표시
