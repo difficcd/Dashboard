@@ -50,7 +50,7 @@ def save_bills_to_db(bills):
         session.close()
 
 
-def load_bills_from_db(age, year=None, max_age_minutes=60):
+def load_bills_from_db(age, year=None, max_age_minutes=300000000000):
     now = datetime.now()
     session = SessionLocal()
     result = []
