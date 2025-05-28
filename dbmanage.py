@@ -33,7 +33,7 @@ def save_to_db(committee_counts, age):
     conn.commit()
     conn.close()
 
-def load_from_db(ages, max_age_minutes=60):
+def load_from_db(ages, max_age_minutes=30):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     total = 0
