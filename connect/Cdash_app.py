@@ -7,7 +7,8 @@ import json
 import time
 import threading
 from collections import defaultdict
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs
+from dbmanage import load_from_db, save_to_db # DB 관리 모듈 
 
 API_KEY = "68da180a494a4cc3b8add2071dc95242"
 DEFAULT_AGES = [20, 21, 22]
@@ -19,67 +20,81 @@ running_flag = threading.Event()  # 현재 작업 실행 중 여부
 last_ages = None  # 전역 변수로 이동
 
 def get_committee_counts_and_total(ages=DEFAULT_AGES):
+    if cancel_flag.is_set():
+        print("[CANCELLED BEFORE START]")
+        return {}, 0
+
     endpoint = "https://open.assembly.go.kr/portal/openapi/TVBPMBILL11"
+    running_flag.set()
 
-    running_flag.set()  # 작업 시작
-    committee_counts = defaultdict(int)
-    total_count = 0
+    try:
+        committee_counts, total_count = load_from_db(ages)
+        if total_count > 0:
+            print("[DB HIT]")
+            return committee_counts, total_count
+        
+        committee_counts = defaultdict(int)
+        total_count = 0
 
-    for age in ages:
-        print(f"\n[START] AGE={age}")
-        page = 1
-        while True:
-            # 중단 요청 시 종료
-            if cancel_flag.is_set():
-                print(f"[CANCELLED] AGE={age} PAGE={page}")
-                running_flag.clear()
-                return {}, 0
+        for age in ages:
+            print(f"\n[START] AGE={age}")
+            page = 1
+            while True:
+                if cancel_flag.is_set():
+                    print(f"[CANCELLED] AGE={age} PAGE={page}")
+                    return {}, 0  # running_flag will be cleared in finally
 
-            params = {
-                "KEY": API_KEY,
-                "Type": "json",
-                "pIndex": page,
-                "pSize": P_SIZE,
-                "AGE": age
-            }
-            url = f"{endpoint}?{urllib.parse.urlencode(params)}"
+                # API 요청 처리
+                params = {
+                    "KEY": API_KEY,
+                    "Type": "json",
+                    "pIndex": page,
+                    "pSize": P_SIZE,
+                    "AGE": age
+                }
+                url = f"{endpoint}?{urllib.parse.urlencode(params)}"
 
-            try:
-                print(f"  [Request] AGE={age} PAGE={page}")
-                req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-                response = urllib.request.urlopen(req)
-                data = json.loads(response.read())
+                try:
+                    print(f"  [Request] AGE={age} PAGE={page}")
+                    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+                    response = urllib.request.urlopen(req)
+                    data = json.loads(response.read())
 
-                items = data.get("TVBPMBILL11", [])
-                if len(items) < 2 or "row" not in items[1]:
-                    print(f"  [No More Data] AGE={age} PAGE={page}")
+                    items = data.get("TVBPMBILL11", [])
+                    if len(items) < 2 or "row" not in items[1]:
+                        print(f"  [No More Data] AGE={age} PAGE={page}")
+                        break
+
+                    rows = items[1]["row"]
+                    if isinstance(rows, dict):
+                        rows = [rows]
+
+                    for row in rows:
+                        committee = row.get("CURR_COMMITTEE", "미지정")
+                        committee_counts[committee] += 1
+                        total_count += 1
+
+                    print(f"  [Fetched] AGE={age} PAGE={page} ROWS={len(rows)} TOTAL={total_count}")
+
+                    if len(rows) < P_SIZE:
+                        print(f"  [Last Page] AGE={age} PAGE={page}")
+                        break
+
+                    page += 1
+
+                except Exception as e:
+                    print(f"  [Error] AGE={age} PAGE={page} Error: {e}")
                     break
+            save_to_db(dict(committee_counts), age)
 
-                rows = items[1]["row"]
-                if isinstance(rows, dict):
-                    rows = [rows]
+        print(f"\n[COMPLETE] Total count for AGES {ages}: {total_count}")
+        print(f"[Committee Counts]: {dict(committee_counts)}")
+        return dict(committee_counts), total_count
 
-                for row in rows:
-                    committee = row.get("CURR_COMMITTEE", "미지정")
-                    committee_counts[committee] += 1
-                    total_count += 1
+    finally:
+        running_flag.clear()  #  무조건 실행되도록 finally에서 처리
 
-                print(f"  [Fetched] AGE={age} PAGE={page} ROWS={len(rows)} TOTAL={total_count}")
-
-                if len(rows) < P_SIZE:
-                    print(f"  [Last Page] AGE={age} PAGE={page}")
-                    break
-
-                page += 1
-
-            except Exception as e:
-                print(f"  [Error] AGE={age} PAGE={page} Error: {e}")
-                break
-
-    print(f"\n[COMPLETE] Total count for AGES {ages}: {total_count}")
-    print(f"[Committee Counts]: {dict(committee_counts)}")
-    running_flag.clear()  # 작업 끝
-    return dict(committee_counts), total_count
+        
 
 def create_figure(committee_counts, total_count, top_n=15):
     print(f"\n[Create Figure] Total Count: {total_count}")
