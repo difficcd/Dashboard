@@ -1,5 +1,4 @@
 from dash import Dash, html, dcc, Input, Output
-
 import plotly.graph_objects as go
 
 import urllib.request
@@ -13,8 +12,7 @@ import numpy as np
 from scipy.interpolate import make_interp_spline
 from datetime import date
 import time
-
-
+from dbmanage_CNT import init_CNTdb, load_bills_from_db, save_bills_to_db, clear_db  # DB 관리 모듈
 
 
 # API 키 및 회기별 기간 정보
@@ -26,16 +24,13 @@ AGE_DATE_MAP = {
 }
 
 # 법안 수집 함수
-def get_bills_by_age(age, year=None):
+def get_bills_by_age(age):
     url = "https://open.assembly.go.kr/portal/openapi/TVBPMBILL11"
     bills = []
     p_index = 1
     p_size = 1000
 
-    # 연도 범위로 종료 조건 설정
-    year_end_cutoff = None
-    if year:
-        year_end_cutoff = datetime(year, 12, 31)
+    clear_db(age)
 
     while True:
         params = {
@@ -60,32 +55,33 @@ def get_bills_by_age(age, year=None):
             data = json.loads(response.read())
 
             items = data.get("TVBPMBILL11", [])
-            if len(items) < 2 or "row" not in items[1]:
-                break
+            rows = items[1].get("row", []) if len(items) > 1 else []
 
-            rows = items[1]["row"]
+            print(f"[DEBUG] {age}대 {p_index}페이지: 가져온 법안 수 = {len(rows)}")
+
+            if not rows:
+                break  # row가 없거나 비어있으면 종료
+
             for row in rows:
                 dt_str = row.get("PROPOSE_DT", "").strip()
                 try:
-                    dt = datetime.strptime(dt_str, "%Y-%m-%d")
+                    datetime.strptime(dt_str, "%Y-%m-%d")
+                    bills.append((age, dt_str))
                 except:
                     continue
 
-                # 연도 필터링
-                if year and dt.year != year:
-                    continue
-
-                bills.append(dt_str)
-
             if len(rows) < p_size:
-                break
+                break  # 마지막 페이지일 경우 종료
+
             p_index += 1
 
         except Exception as e:
-            print(f" AGE {age} PAGE {p_index} Error: {e}")
+            print(f"[ERROR] AGE {age} PAGE {p_index}: {e}")
             break
+            
+    save_bills_to_db(bills)
+    return [dt for (_, dt) in bills]
 
-    return bills
 
 
 # 월별로 그룹화
@@ -97,9 +93,11 @@ def group_bills_by_month(bills, target_year):
             if dt.year == target_year:
                 ym = dt.strftime("%Y-%m")
                 counter[ym] += 1
-        except:
+        except Exception as e:
+            print(f"[오류] 날짜 파싱 실패: {dt_str} - {e}")
             continue
     return counter
+
 
 # 그래프 생성 함수
 def create_figure(all_data, target_year):
@@ -219,11 +217,6 @@ def create_figure(all_data, target_year):
     return fig
 
 
-
-
-
-
-
 # 임베드 준비 app 생성
 def create_dash_app():
 
@@ -244,7 +237,6 @@ def create_dash_app():
                 except:
                     pass
 
-    # 연도와 겹치는 모든 회기를 리스트로 수집
         target_ages = []
         for age, (start, end) in AGE_DATE_MAP.items():
             if start.year <= year <= end.year:
@@ -259,15 +251,18 @@ def create_dash_app():
 
         print(f"\n {year}년 → 대상 회기: {target_ages}")
 
-        # 여러 회기의 데이터 수집
         all_bills_by_age = {}
         for age in target_ages:
-            bills = get_bills_by_age(age, year)
+            bills = load_bills_from_db(age, year)
+            if not bills:
+                bills = get_bills_by_age(age)
+
             print(f" ▶ {age}대 국회: {len(bills)}건 수집 완료")
             grouped = group_bills_by_month(bills, target_year=year)
             all_bills_by_age[age] = grouped
 
         return create_figure(all_bills_by_age, target_year=year)
+        
 
 
     app.layout = html.Div([
@@ -280,7 +275,7 @@ def create_dash_app():
             children=[
                 dcc.Graph(
                     id="graph",
-                    style={"height": "300px"},
+                    style={"height": "280px"},
                     config={'displaylogo': False}
                 )
             ]
