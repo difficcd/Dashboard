@@ -102,7 +102,7 @@ def create_figure(committee_counts, total_count, top_n=15):
         go.Bar(
             x=top_labels,
             y=top_percentages,
-            marker=dict(color="#FFFFFF"),
+            marker=dict(color="#939BD7"),
             width=0.55,
             text=[f"{p:.1f}%" for p in top_percentages],
             textposition='outside',
@@ -124,7 +124,11 @@ def create_figure(committee_counts, total_count, top_n=15):
         xaxis_tickangle=-30,
         xaxis=dict(tickfont=dict(size=7.5)),
         yaxis=dict(tickfont=dict(size=10)),
-        uniformtext=dict(mode='hide', minsize=8)
+        uniformtext=dict(mode='hide', minsize=8),
+        hoverlabel=dict(
+            bgcolor="white",
+            font=dict(color="black")
+        )
     )
 
     return fig
@@ -177,7 +181,7 @@ def create_Cdash_app():
                 children=[
                     dcc.Graph(
                         id="graph",
-                        style={"height": "300px"}
+                        style={"height": "280px"}
                     )
                 ]
             )
