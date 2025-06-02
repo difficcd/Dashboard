@@ -78,10 +78,12 @@ def get_bill_titles_by_age(age):
 
     return bill_titles
 
-def has_enough_comments(news_url, min_comments=0):
+def get_comment_count(news_url):
     try:
         driver.get(news_url)
-        time.sleep(1)  #댓글 크롤링 : 네트워크 시간 고려
+        time.sleep(1)
+
+        # 더보기 버튼 계속 클릭
         while True:
             try:
                 more_btn = driver.find_element(By.CLASS_NAME, "u_cbox_btn_more")
@@ -91,18 +93,21 @@ def has_enough_comments(news_url, min_comments=0):
                 break
 
         comments = driver.find_elements(By.CSS_SELECTOR, "span.u_cbox_contents")
-        return len(comments) >= min_comments
+        count = len(comments)
+
+        return count
 
     except Exception as e:
         print(f"   [댓글 수집 실패] {news_url} → {e}")
-        return False
+        return 0
 
 
 
-
-def search_news_unique(title, sim_threshold=0.7):
-    query = urllib.parse.quote(title)
-    url = f"https://openapi.naver.com/v1/search/news?query={query}&display=30&start=1&sort=date" 
+def search_news_unique(title, sim_threshold=0.6):  # 유사도 임계값 설정
+    cleaned_title = re.sub(r'일부개정법률안.*|전부개정법률안.*|일부개정.*|전부개정.*', '', title)
+    cleaned_title = re.sub(r'\(.*?\)', '', cleaned_title).strip()
+    query = urllib.parse.quote(cleaned_title)
+    url = f"https://openapi.naver.com/v1/search/news?query={query}&display=100&start=1&sort=date"
 
     request = urllib.request.Request(url)
     request.add_header("X-Naver-Client-Id", client_id)
@@ -114,10 +119,12 @@ def search_news_unique(title, sim_threshold=0.7):
         data = json.loads(response.read().decode("utf-8"))
         items = data.get("items", [])
 
-        six_months_ago = datetime.now() - timedelta(days=180)
-        valid_items = []
-        has_news = False
-        has_high_comment_news = False
+        one_year_ago = datetime.now() - timedelta(days=800)
+        article_candidates = []
+
+        print(f"\n📌 {title} (→ 검색어: {cleaned_title})")
+
+        title_emb = get_embedding(title)
 
         for item in items:
             raw_title = item["title"].replace("<b>", "").replace("</b>", "")
@@ -126,7 +133,7 @@ def search_news_unique(title, sim_threshold=0.7):
 
             try:
                 pub_date = datetime.strptime(pubDate, "%a, %d %b %Y %H:%M:%S %z").replace(tzinfo=None)
-                if pub_date < six_months_ago:
+                if pub_date < one_year_ago:
                     continue
             except:
                 continue
@@ -134,39 +141,30 @@ def search_news_unique(title, sim_threshold=0.7):
             if "n.news.naver.com" not in link:
                 continue
 
-            pattern = r'\b' + re.escape(title) + r'\b'
-            if not re.search(pattern, raw_title, re.IGNORECASE):
+            sim = util.cos_sim(title_emb, get_embedding(raw_title)).item()
+            if sim < sim_threshold:
                 continue
 
-            cur_embed = get_embedding(raw_title)
-            is_similar = False
-            for prev_title in printed_titles:
-                prev_embed = get_embedding(prev_title)
-                similarity = util.pytorch_cos_sim(cur_embed, prev_embed).item()
-                if similarity > sim_threshold:
-                    is_similar = True
-                    break
+            comment_count = get_comment_count(link)
+            article_candidates.append((raw_title, link, comment_count, sim))
+            printed_titles.append(raw_title)
 
-            if not is_similar:
-                valid_items.append((raw_title, link))
-                printed_titles.append(raw_title)
-
-        if valid_items:
-            print(f"\n📌 {title}")  # 법안명 출력
-            has_news = True
-
-            for raw_title, link in valid_items:
-                if has_enough_comments(link, min_comments=5):
-                    print(f"   ✅ {raw_title} → {link}")
-                    has_high_comment_news = True
-                else:
-                    print(f"   - {raw_title} → {link}")
-
-        return has_high_comment_news
+        if article_candidates:
+            best_article = sorted(article_candidates, key=lambda x: x[2], reverse=True)[0]
+            max_comment = best_article[2]
+            if max_comment >= 5:
+                print(f"   ✅ {best_article[0]} ({max_comment}개, 유사도: {best_article[3]:.2f}) → {best_article[1]}")
+                return True
+            else:
+                print(f"   ⚠️ 뉴스 {len(article_candidates)}개, 최대 댓글수 {max_comment}개, 유사도 최댓값 {best_article[3]:.2f} → 조건 미충족")
+        else:
+            print("   ❌ 조건 충족 뉴스 없음")
 
     except Exception as e:
         print(f"[뉴스 검색 오류] {title}: {e}")
+
     return False
+
 
 
 
@@ -177,6 +175,9 @@ if __name__ == "__main__":
 
     # 1️⃣ DB 확인
     titles = get_bills_by_age(age)
+    titles = list(dict.fromkeys(titles)) #완전한 중복 제거 (최신 순서 유지)
+
+
     if titles:
         print(f"[INFO] DB에서 {age}대 국회 법안 {len(titles)}개를 가져왔습니다.\n")
     else:
@@ -202,6 +203,7 @@ if __name__ == "__main__":
         result = search_news_unique(title)
         if result:
             print(f"👉 {i}. {title} → ✅ 댓글 많은 뉴스 있음\n")
+            
         time.sleep(0.1)
 
     driver.quit()
