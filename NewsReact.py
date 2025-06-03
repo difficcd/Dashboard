@@ -1,3 +1,20 @@
+# -*- coding: utf-8 -*-
+"""
+ **병렬 처리** : `concurrent.futures.ThreadPoolExecutor` 로 뉴스‧댓글 탐색을
+   병렬화합니다. 각 스레드는 자체 Chrome WebDriver 인스턴스를 생성해
+   *selenium* 충돌을 방지합니다.
+ **DB 함수 네이밍** : ``get_bills_by_year`` / ``insert_bill_by_year`` 로 변경.
+   (기존 ``dbmanage_News`` 모듈에도 동일 함수가 있어야 합니다.)
+ **search_news_unique()** 와 ``get_comment_count()`` 가 WebDriver를 인자로
+   받아 스레드 간 독립적으로 동작합니다.
+
+주의
+----
+* 법안 API가 **연도 파라미터를 직접 지원하지 않기** 때문에, 세
+  번(20‧21‧22대) API 호출 후 ``PROPOSE_DT`` 기준으로 분류합니다.
+* Selenium 드라이버가 많을 때 리소스 사용이 커질 수 있으니
+  ``MAX_WORKERS`` 값을 상황에 맞게 조정하세요.
+"""
 import json
 import urllib.request
 import urllib.parse
@@ -8,136 +25,145 @@ from sentence_transformers import SentenceTransformer, util
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
-from dbmanage_News import SessionLocal, Bill, get_bills_by_age, insert_bill, init_db
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# --- 설정 ---
+from dbmanage_News import (
+    get_bills_by_year, 
+    insert_bill_by_year, 
+    init_db, 
+    insert_bill_news,
+    is_news_exist
+    )
+
+best_articles_by_title = {}
+
+
 API_KEY = "68da180a494a4cc3b8add2071dc95242"
 client_id = "CKb4pAJ84D6tVcCvpjka"
 client_secret = "5PucVvnteo"
+YEARS = list(range(2025, datetime.now().year + 1))  # 2016 ~ 올해
+MAX_WORKERS = 8  # 병렬 스레드 개수 : 6~8 추천
 
-# 임베딩 모델
-model = SentenceTransformer('all-MiniLM-L6-v2')
-printed_titles = []
+# 임베딩 모델 (스레드 안전)
+model = SentenceTransformer("all-MiniLM-L6-v2")
 embedding_cache = {}
 
-# 셀레니움 설정
-options = Options()
-options.add_argument("--headless")
-options.add_argument("--no-sandbox")
-options.add_argument("--disable-dev-shm-usage")
-driver = webdriver.Chrome(options=options)
-
-# --- 함수 ---
-
-def get_embedding(text):
+def get_embedding(text: str):
     if text not in embedding_cache:
         embedding_cache[text] = model.encode(text, convert_to_tensor=True)
     return embedding_cache[text]
 
-def get_bill_titles_by_age(age):
-    url = "https://open.assembly.go.kr/portal/openapi/TVBPMBILL11"
-    bill_titles = []
-    p_index = 1
-    p_size = 1000
+# Selenium 기본 옵션 – 스레드마다 새 인스턴스를 씀
+base_options = Options()
+base_options.add_argument("--headless=new")
+base_options.add_argument("--no-sandbox")
+base_options.add_argument("--disable-dev-shm-usage")
 
+API_URL = "https://open.assembly.go.kr/portal/openapi/TVBPMBILL11"
+
+
+def _get_bill_rows_by_age(age: int, p_size: int = 1000):
+    """특정 *대수*의 모든 법안 row를 반환."""
+    rows, p_index = [], 1
     while True:
         params = {
             "KEY": API_KEY,
             "Type": "json",
+            "AGE": age,
             "pIndex": p_index,
             "pSize": p_size,
-            "AGE": age
         }
-        full_url = f"{url}?{urllib.parse.urlencode(params)}"
-
+        url = f"{API_URL}?{urllib.parse.urlencode(params)}"
         try:
-            time.sleep(0.1)
-            req = urllib.request.Request(full_url, headers={"User-Agent": "Mozilla/5.0"})
-            response = urllib.request.urlopen(req, timeout=10)
-            data = json.loads(response.read())
-
+            time.sleep(0.1)  # 너무 빠른 호출 방지
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read())
             items = data.get("TVBPMBILL11", [])
-            rows = items[1].get("row", []) if len(items) > 1 else []
-
-            if not rows:
+            page_rows = items[1].get("row", []) if len(items) > 1 else []
+            if not page_rows:
                 break
-
-            for row in rows:
-                bill_name = row.get("BILL_NAME", "").strip()
-                if bill_name:
-                    bill_titles.append(bill_name)
-
-            if len(rows) < p_size:
+            rows.extend(page_rows)
+            if len(page_rows) < p_size:
                 break
-
             p_index += 1
-
         except Exception as e:
-            print(f"[ERROR] {age}대 {p_index}페이지 에러: {e}")
+            print(f"[API 오류] {age}대 {p_index}페이지 → {e}")
             break
+    return rows
 
-    return bill_titles
 
-def get_comment_count(news_url):
+def get_bill_titles_by_year(year: int):
+    """주어진 *year*(YYYY) 에 발의된 모든 법안명을 리스트로 반환."""
+    titles = []
+    # 20‧21‧22대 국회 범주에 모두 질의한 뒤 날짜로 필터링
+    for age in (20, 21, 22):
+        for row in _get_bill_rows_by_age(age):
+            propose_dt = row.get("PROPOSE_DT", "")  # YYYYMMDD 형태
+            if propose_dt.startswith(str(year)):
+                title = row.get("BILL_NAME", "").strip()
+                if title:
+                    titles.append(title)
+    # 중복 제거 (원본 순서 유지)
+    return list(dict.fromkeys(titles))
+
+
+
+def get_comment_count(news_url: str, driver: webdriver.Chrome) -> int:
+    """네이버 뉴스 URL에서 댓글 수를 반환."""
     try:
         driver.get(news_url)
         time.sleep(1)
-
-        # 더보기 버튼 계속 클릭
+        # "더보기" 버튼 자동 클릭
         while True:
             try:
                 more_btn = driver.find_element(By.CLASS_NAME, "u_cbox_btn_more")
                 driver.execute_script("arguments[0].click();", more_btn)
-                time.sleep(0.5)
-            except:
+                time.sleep(0.4)
+            except Exception:
                 break
-
-        comments = driver.find_elements(By.CSS_SELECTOR, "span.u_cbox_contents")
-        count = len(comments)
-
-        return count
-
+        return len(driver.find_elements(By.CSS_SELECTOR, "span.u_cbox_contents"))
     except Exception as e:
-        print(f"   [댓글 수집 실패] {news_url} → {e}")
+        print(f"   [댓글 실패] {news_url} → {e}")
         return 0
 
 
+def search_news_unique(title: str, sim_threshold: float = 0.4): 
+    # 네이버 뉴스 검색기능이 관련성을 어느정도 보장하므로 0.0 으로 유사도기준 완화
+    # 반대 의미의 기사일 경우에만 걸러내도록 함 (거의 X)
 
-def search_news_unique(title, sim_threshold=0.6):  # 유사도 임계값 설정
-    cleaned_title = re.sub(r'일부개정법률안.*|전부개정법률안.*|일부개정.*|전부개정.*', '', title)
-    cleaned_title = re.sub(r'\(.*?\)', '', cleaned_title).strip()
-    query = urllib.parse.quote(cleaned_title)
+    cleaned = re.sub(r"일부개정법률안.*|전부개정법률안.*|일부개정.*|전부개정.*", "", title)
+    cleaned = re.sub(r"\(.*?\)", "", cleaned).strip()
+    query = urllib.parse.quote(cleaned)
     url = f"https://openapi.naver.com/v1/search/news?query={query}&display=100&start=1&sort=date"
-
-    request = urllib.request.Request(url)
-    request.add_header("X-Naver-Client-Id", client_id)
-    request.add_header("X-Naver-Client-Secret", client_secret)
-    request.add_header("User-Agent", "Mozilla/5.0")
+    req = urllib.request.Request(url)
+    for k, v in (
+        ("X-Naver-Client-Id", client_id),
+        ("X-Naver-Client-Secret", client_secret),
+        ("User-Agent", "Mozilla/5.0"),
+    ):
+        req.add_header(k, v)
 
     try:
-        response = urllib.request.urlopen(request)
-        data = json.loads(response.read().decode("utf-8"))
+        with urllib.request.urlopen(req) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
         items = data.get("items", [])
-
-        one_year_ago = datetime.now() - timedelta(days=800)
-        article_candidates = []
-
-        print(f"\n📌 {title} (→ 검색어: {cleaned_title})")
-
+        cut_off = datetime.now() - timedelta(days=800)
         title_emb = get_embedding(title)
+
+        best_article = None
+        driver = webdriver.Chrome(options=base_options)
 
         for item in items:
             raw_title = item["title"].replace("<b>", "").replace("</b>", "")
             link = item["link"]
             pubDate = item["pubDate"]
-
             try:
-                pub_date = datetime.strptime(pubDate, "%a, %d %b %Y %H:%M:%S %z").replace(tzinfo=None)
-                if pub_date < one_year_ago:
+                pub_dt = datetime.strptime(pubDate, "%a, %d %b %Y %H:%M:%S %z").replace(tzinfo=None)
+                if pub_dt < cut_off:
                     continue
-            except:
+            except Exception:
                 continue
-
             if "n.news.naver.com" not in link:
                 continue
 
@@ -145,65 +171,99 @@ def search_news_unique(title, sim_threshold=0.6):  # 유사도 임계값 설정
             if sim < sim_threshold:
                 continue
 
-            comment_count = get_comment_count(link)
-            article_candidates.append((raw_title, link, comment_count, sim))
-            printed_titles.append(raw_title)
+            c_cnt = get_comment_count(link, driver)
+            if c_cnt < 5:
+                continue
 
-        if article_candidates:
-            best_article = sorted(article_candidates, key=lambda x: x[2], reverse=True)[0]
-            max_comment = best_article[2]
-            if max_comment >= 5:
-                print(f"   ✅ {best_article[0]} ({max_comment}개, 유사도: {best_article[3]:.2f}) → {best_article[1]}")
-                return True
-            else:
-                print(f"   ⚠️ 뉴스 {len(article_candidates)}개, 최대 댓글수 {max_comment}개, 유사도 최댓값 {best_article[3]:.2f} → 조건 미충족")
-        else:
-            print("   ❌ 조건 충족 뉴스 없음")
+            if (
+                best_article is None or
+                c_cnt > best_article[2] or
+                (c_cnt == best_article[2] and sim > best_article[3])
+            ):
+                best_article = (raw_title, link, c_cnt, sim)
 
+        driver.quit()
+        return best_article
     except Exception as e:
         print(f"[뉴스 검색 오류] {title}: {e}")
-
-    return False
-
+        return None
 
 
 
-# --- 실행 ---
+# 스레드 작업 함수
+def process_title(index: int, title: str, year: int):
+    print(f"\n[{index+1:03}] {title} 뉴스 탐색 시작:")
+    if is_news_exist(title, year):
+        print(f"[{index+1:03}] db에 저장된 기존 뉴스들 목록:")
+        return  # 뉴스가 이미 존재하므로 재검색 X
+    result = search_news_unique(title)
+    if result:
+        best_title, best_link, c_cnt, sim = result
+        best_articles_by_title[title] = result
+        print(f"[{index+1:03}] ✅ {best_title} ({c_cnt}개, 유사도 {sim:.3f})")
+        print(f"[{index+1:03}] {title} → 🔎 최다 댓글 뉴스기사 링크 : {best_link}")
+        insert_bill_news(
+            bill_title=title,
+            year=year,
+            news_title=best_title,
+            news_url=best_link,
+            comment_count=c_cnt,
+            similarity=sim,
+        )
+    else:
+        print(f"[{index+1:03}] ❌ 뉴스 기사 없음 또는 조건 불충족")
+
+
 if __name__ == "__main__":
-    age = 22
     init_db()
 
-    # 1️⃣ DB 확인
-    titles = get_bills_by_age(age)
-    titles = list(dict.fromkeys(titles)) #완전한 중복 제거 (최신 순서 유지)
+    for year in YEARS:
+        print(f"\n==================== {year}년 법안 ====================")
+        # 1️ DB 확인
+        titles = get_bills_by_year(year)
+        if titles:
+            print(f"[INFO] DB에서 {year}년 법안 {len(titles)}개를 가져왔습니다.")
+        else:
+            print(f"[INFO] DB에 {year}년 자료가 없어 API를 호출합니다.")
+            titles = get_bill_titles_by_year(year)
+            print(f"[INFO] {year}년 법안 {len(titles)}개 수집 완료.")
+            #  DB 저장
+            saved = skipped = 0
+            for t in titles:
+                try:
+                    insert_bill_by_year(year, t)
+                    saved += 1
+                except Exception as e:
+                    print(f"[DB 저장 실패] {t} → {e}")
+                    skipped += 1
+            print(f"[DB 저장 결과] 시도: {len(titles)}, 성공: {saved}, 스킵: {skipped}")
 
+        # 3 병렬 뉴스 검색
+        if not titles:
+            continue
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            futures = [
+            executor.submit(process_title, i, t)
+            for i, t in enumerate(titles)
+            if not is_news_exist(t, year)  # ✅ 이미 뉴스가 있으면 스킵
+        ]
+            for _ in as_completed(futures):
+                pass
 
-    if titles:
-        print(f"[INFO] DB에서 {age}대 국회 법안 {len(titles)}개를 가져왔습니다.\n")
-    else:
-        print(f"[INFO] DB에 {age}대 국회 법안이 없어, API에서 가져옵니다.\n")
-        titles = get_bill_titles_by_age(age)
-
-        print(f"[INFO] {age}대 국회에서 {len(titles)}개의 법안명을 수집했습니다.\n")
-
-        # 2️⃣ DB에 저장 (중복 확인 포함)
-        saved, skipped = 0, 0
+        
         for title in titles:
-            try:
-                insert_bill(age, title)
-                saved += 1
-            except Exception as e:
-                print(f"[DB 저장 실패] {title} → {e}")
-                skipped += 1
+            article = best_articles_by_title.get(title)
+            if article:
+                _, url, _, sim = article
+                driver = webdriver.Chrome(options=base_options)
+                try:
+                    c_cnt = get_comment_count(url, driver)
+                    if c_cnt >= 5:
+                        print(f"\n   ✅ {article[0]} ({c_cnt}개, 유사도 {sim:.3f})")
+                        print(f"{title} → 🔎 최다 댓글 뉴스기사 링크 : {url} ")
+                finally:
+                    driver.quit()
 
-        print(f"[DB 저장 결과] 총 시도: {len(titles)}, 성공: {saved}, 스킵: {skipped}\n")
 
-    # 3️⃣ 뉴스 검색 및 출력
-    for i, title in enumerate(titles, 1):
-        result = search_news_unique(title)
-        if result:
-            print(f"👉 {i}. {title} → ✅ 댓글 많은 뉴스 있음\n")
-            
-        time.sleep(0.1)
-
-    driver.quit()
+        # 약간의 휴식 – API 및 네이버 과부하 방지
+        time.sleep(2)
