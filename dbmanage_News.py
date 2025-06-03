@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine, Column, Integer, String, UniqueConstraint
 from sqlalchemy.orm import declarative_base, sessionmaker
+import urllib.parse
 import re
 import unicodedata
 import os
@@ -36,6 +37,80 @@ class Bill(Base):
     __table_args__ = (UniqueConstraint("year", "title", name="uix_year_title"),)
 
 
+# 결과 없을 때 여부 저장
+def insert_no_news_placeholder(bill_title: str, year: int):
+    session = SessionLocal()
+    try:
+        norm_title = normalize_title(bill_title)
+        bill = session.query(Bill).filter_by(year=year, title=norm_title).first()
+        if not bill:
+            print(f"[PLACEHOLDER 오류] 해당 법안 없음 → {year} / {norm_title}")
+            return
+
+        # 이미 placeholder가 저장돼 있는지 확인
+        exists = session.query(BillNews).filter_by(
+            bill_id=bill.id,
+            news_url="(없음)"
+        ).first()
+        if exists:
+            print(f"[PLACEHOLDER 스킵] 이미 존재 → {year} / {norm_title}")
+            return
+
+        news = BillNews(
+            bill_id=bill.id,
+            news_title="(관련 뉴스 없음)",
+            news_url="(없음)",
+            comment_count=0,
+            similarity="0.0"
+        )
+        session.add(news)
+        session.commit()
+        print(f"[PLACEHOLDER 저장] {year} / {norm_title}")
+    except Exception as e:
+        print(f"[PLACEHOLDER 저장 실패] {year} / {bill_title} → {e}")
+    finally:
+        session.close()
+
+
+
+
+def get_news_by_bill_title(title: str, year: int):
+    session = SessionLocal()
+    try:
+        norm_title = normalize_title(title)
+        bill = session.query(Bill).filter_by(year=year, title=norm_title).first()
+        if not bill:
+            return []
+        news_entries = session.query(BillNews).filter_by(bill_id=bill.id).all()
+        return [(n.news_title, n.news_url) for n in news_entries]
+    finally:
+        session.close()
+
+
+
+def is_exact_news_exist(bill_title: str, year: int, news_title: str, news_url: str) -> bool:
+    session = SessionLocal()
+    try:
+        norm_title = normalize_title(bill_title)
+        bill = session.query(Bill).filter_by(year=year, title=norm_title).first()
+        if not bill:
+            return False
+
+        news_url = news_url.strip()
+        parsed = urllib.parse.urlparse(news_url)
+        cleaned_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+
+        exists = session.query(BillNews).filter_by(
+            bill_id=bill.id,
+            news_title=news_title,
+            news_url=cleaned_url
+        ).first()
+        return exists is not None
+    finally:
+        session.close()
+
+
+
 
 def normalize_title(title):
     title = re.sub(r"\s+", " ", title)  # 여러 공백 → 하나로
@@ -46,26 +121,25 @@ def normalize_title(title):
 
 
 def is_news_exist(bill_title: str, year: int) -> bool:
-    print(f"[DEBUG][is_news_exist] 호출됨 - year: {year}, title: '{bill_title}'")
     session = SessionLocal()
     try:
         norm_title = normalize_title(bill_title)
-        print(f"[DEBUG][is_news_exist] 정규화된 title: '{norm_title}'")
-
         bill = session.query(Bill).filter_by(year=year, title=norm_title).first()
         if not bill:
-            print(f"[DEBUG][is_news_exist] 해당 법안이 DB에 없음: ({year}, '{norm_title}')")
+            print(f"[DEBUG][is_news_exist] # 해당 법안이 DB에 없음: ({year}, '{norm_title}')")
             return False
 
-        news = session.query(BillNews).filter_by(bill_id=bill.id).first()
-        if news:
-            print(f"[DEBUG][is_news_exist] 뉴스 존재함 → bill_id: {bill.id}, news_url: {news.news_url}")
+        news_entries = session.query(BillNews).filter_by(bill_id=bill.id).all()
+        if news_entries:
+            print(f"[DEBUG][is_news_exist] ** 뉴스 존재함 → bill_id: {bill.id}, 개수: {len(news_entries)}")
             return True
         else:
-            print(f"[DEBUG][is_news_exist] 뉴스 없음 → bill_id: {bill.id}")
+            print(f"[DEBUG][is_news_exist] ** 뉴스 없음 → bill_id: {bill.id}")
             return False
     finally:
         session.close()
+
+
 
 
 
@@ -96,39 +170,45 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
     print(f"[DEBUG] os.getcwd(): {os.getcwd()}")
-    print(f"[DEBUG] __file__: {__file__}")
-
+    print(f"[DEBUG] __file__: {__file__ if '__file__' in globals() else 'N/A'}")
 
 
 def insert_bill_news(bill_title, year, news_title, news_url, comment_count, similarity):
     session = SessionLocal()
     try:
+        # 1. 관련 법안 ID 찾기
         norm_title = normalize_title(bill_title)
-        bill = session.query(Bill).filter_by(year=year, title=norm_title).first()
+        bill = session.query(Bill).filter_by(title=norm_title, year=year).first()
         if not bill:
-            print(f"[WARN] 법안 미존재 → {year}년: {bill_title}")
-            return False
-        exists = session.query(BillNews).filter_by(bill_id=bill.id, news_url=news_url).first()
+            print(f"[DB 오류] 해당 법안 없음 → {year} / {norm_title}")
+            return
+
+        # 2. URL 정리
+        news_url = news_url.strip()
+        parsed = urllib.parse.urlparse(news_url)
+        clean_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
+
+        # ✅ 3. 중복 확인
+        exists = session.query(BillNews).filter_by(bill_id=bill.id, news_url=clean_url).first()
         if exists:
-            print(f"[DEBUG] 이미 저장됨 → {bill_title} - {news_url}")
-            return False
-        new_entry = BillNews(
+            print(f"[중복 스킵] 이미 저장된 뉴스입니다 → {bill_title} / {clean_url}")
+            return
+
+        # 4. 저장
+        news = BillNews(
             bill_id=bill.id,
             news_title=news_title,
-            news_url=news_url,
+            news_url=clean_url,
             comment_count=comment_count,
-            similarity=str(similarity)
+            similarity=similarity,
         )
-        session.add(new_entry)
+        session.add(news)
         session.commit()
-        print(f"[INFO] 뉴스 저장 완료 → {news_title}")
-        return True
     except Exception as e:
         print(f"[DB 오류] 뉴스 저장 실패 → {e}")
-        session.rollback()
-        return False
     finally:
         session.close()
+
 
 
 
