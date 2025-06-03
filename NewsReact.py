@@ -1,20 +1,3 @@
-# -*- coding: utf-8 -*-
-"""
- **병렬 처리** : `concurrent.futures.ThreadPoolExecutor` 로 뉴스‧댓글 탐색을
-   병렬화합니다. 각 스레드는 자체 Chrome WebDriver 인스턴스를 생성해
-   *selenium* 충돌을 방지합니다.
- **DB 함수 네이밍** : ``get_bills_by_year`` / ``insert_bill_by_year`` 로 변경.
-   (기존 ``dbmanage_News`` 모듈에도 동일 함수가 있어야 합니다.)
- **search_news_unique()** 와 ``get_comment_count()`` 가 WebDriver를 인자로
-   받아 스레드 간 독립적으로 동작합니다.
-
-주의
-----
-* 법안 API가 **연도 파라미터를 직접 지원하지 않기** 때문에, 세
-  번(20‧21‧22대) API 호출 후 ``PROPOSE_DT`` 기준으로 분류합니다.
-* Selenium 드라이버가 많을 때 리소스 사용이 커질 수 있으니
-  ``MAX_WORKERS`` 값을 상황에 맞게 조정하세요.
-"""
 import json
 import urllib.request
 import urllib.parse
@@ -267,3 +250,23 @@ if __name__ == "__main__":
 
         # 약간의 휴식 – API 및 네이버 과부하 방지
         time.sleep(2)
+
+
+
+# -*- coding: utf-8 -*-
+"""
+ **병렬 처리** : `concurrent.futures.ThreadPoolExecutor` 로 뉴스‧댓글 탐색을
+   병렬화합니다. 각 스레드는 자체 Chrome WebDriver 인스턴스를 생성해
+   *selenium* 충돌을 방지합니다.
+ **DB 함수 네이밍** : ``get_bills_by_year`` / ``insert_bill_by_year`` 로 변경.
+   (기존 ``dbmanage_News`` 모듈에도 동일 함수가 있어야 합니다.)
+ **search_news_unique()** 와 ``get_comment_count()`` 가 WebDriver를 인자로
+   받아 스레드 간 독립적으로 동작합니다.
+
+주의
+----
+* 법안 API가 **연도 파라미터를 직접 지원하지 않기** 때문에, 세
+  번(20‧21‧22대) API 호출 후 ``PROPOSE_DT`` 기준으로 분류합니다.
+* Selenium 드라이버가 많을 때 리소스 사용이 커질 수 있으니
+  ``MAX_WORKERS`` 값을 상황에 맞게 조정하세요.
+"""
