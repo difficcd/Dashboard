@@ -1,4 +1,19 @@
 
+
+6.4 갱신 ===========================
+
+![image](https://github.com/user-attachments/assets/cd55ba18-41b5-43e2-a291-f2675a935af2)
+
+bill_news table
+
+
+![image](https://github.com/user-attachments/assets/a62fac77-1b75-467d-bae3-99c89b69c11f)
+
+bills table (body & propose date 수집 전, 해당부분 수집은 수집속도에따라 개수 결정후 기본표시)
+
+
+
+
 6.3 갱신  ===============================
 
 뉴스기사 가져오는 코드 완료 
