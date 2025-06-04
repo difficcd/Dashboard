@@ -2,16 +2,20 @@
 
 6.4 갱신 ===========================
 
-![image](https://github.com/user-attachments/assets/cd55ba18-41b5-43e2-a291-f2675a935af2)
 
-bill_news table
+![image](https://github.com/user-attachments/assets/f4f4ef1b-8835-4e8b-9810-64d28e1f747a)
 
+bill_news table   >> 년 단위 법안명 가져옴 ( 년 단위 관리 위해 분리 )
 
-![image](https://github.com/user-attachments/assets/a62fac77-1b75-467d-bae3-99c89b69c11f)
-
-bills table (body & propose date 수집 전, 해당부분 수집은 수집속도에따라 개수 결정후 기본표시)
+id year title propose_date 
 
 
+
+![image](https://github.com/user-attachments/assets/fdcc0ecb-a38b-48ac-bfc9-421b48d35c6d)
+
+bills table (body 수집 전, 해당부분 수집은 수집속도에따라 개수 결정후 기본표시)
+
+id bill_id  news_title  news_url  comment_count  similarity body
 
 
 6.3 갱신  ===============================
