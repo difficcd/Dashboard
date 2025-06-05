@@ -1,12 +1,14 @@
-from sqlalchemy import create_engine, Column, Integer, String, UniqueConstraint
+from sqlalchemy import create_engine, Column, Integer, String, Text, UniqueConstraint, Date
 from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy import func
 import urllib.parse
 import re
 import unicodedata
 import os
 
 # ✅ 절대경로로 DB 직접 지정
-DATABASE_URL = "sqlite:///C:/Users/diffi/Desktop/NewsReact/bills.db"
+DATABASE_URL = "sqlite:///C:/Users/diffi/Desktop/Dashboard-main/Dashboard-main/bills.db"
+
 
 # SQLAlchemy 기본 설정
 Base = declarative_base()
@@ -22,6 +24,7 @@ class BillNews(Base):
     news_url = Column(String, nullable=False)
     comment_count = Column(Integer, default=0)
     similarity = Column(String, default="0.0")  # float으로 해도 무방
+    body = Column(Text, nullable=True) 
 
     __table_args__ = (
         UniqueConstraint("bill_id", "news_url", name="uix_bill_news"),
@@ -32,9 +35,31 @@ class BillNews(Base):
 class Bill(Base):
     __tablename__ = "bills"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    year = Column(Integer, nullable=False)  # ✅ 변경: age → year
+    year = Column(Integer, nullable=False)  # 변경: age → year
     title = Column(String, nullable=False)
     __table_args__ = (UniqueConstraint("year", "title", name="uix_year_title"),)
+    propose_date = Column(Date, nullable=True)  
+
+
+
+def update_news_body(bill_id: int, news_url: str, body_text: str):
+    session = SessionLocal()
+    try:
+        news_url = news_url.strip()  # 정규화 제거
+        news = session.query(BillNews).filter_by(bill_id=bill_id, news_url=news_url).first()
+        if news:
+            news.body = body_text
+            session.commit()
+            print(f"[뉴스 본문 저장 완료] {news.news_title} ({bill_id})")
+        else:
+            print(f"[뉴스 본문 저장 실패] 해당 뉴스 없음 → {bill_id} / {news_url}")
+    except Exception as e:
+        print(f"[뉴스 본문 저장 오류] {e}")
+        session.rollback()
+    finally:
+        session.close()
+
+
 
 
 # 결과 없을 때 여부 저장
@@ -232,4 +257,5 @@ def insert_bill_by_year(year, title):
         return False
     finally:
         session.close()
+
 
