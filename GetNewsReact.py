@@ -3,14 +3,25 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import NoSuchElementException
 from transformers import pipeline
-import matplotlib.pyplot as plt
-import matplotlib
+import plotly.express as px
+import plotly.io as pio
 import time
-from dbmanage_News import SessionLocal, BillNews
+from dbmanage_News import SessionLocal, BillNews, Bill
+from dbmanage_NewsReact import (
+    NewsSentiment,
+    init_sentiment_table,  # 테이블 자동 생성 보장
+    insert_sentiment_result,
+    is_sentiment_already_analyzed
+)
+
+
+
+init_sentiment_table()
 
 session = SessionLocal()
+classifier = pipeline("sentiment-analysis", model="nlptown/bert-base-multilingual-uncased-sentiment")
 
-SIZE = 10
+SIZE = 4 # SIZE 개씩 새로 가져옴 (비어있는 부분만!)
 raw_results = (
     session.query(BillNews.news_url)
     .filter(BillNews.news_url != "(없음)")
@@ -33,15 +44,14 @@ comment_urls = [url.replace("/article/", "/article/comment/") for url in urls]
 session.close()
 
 
-# 한글 폰트 설정
-matplotlib.rc('font', family='NanumGothic')
 
 def get_comment_url(article_url):
     return article_url.replace("/article/", "/article/comment/")
 
 def load_comments(driver, comment_url):
     driver.get(comment_url)
-    time.sleep(5)
+    time.sleep(5) # 댓글란 로딩 대기 (네트워크 상태에 따라 조정)
+    
 
     # 더보기 반복
     for _ in range(30):
@@ -120,27 +130,41 @@ def analyze_sentiment(comments):
         "4 stars": "긍정적 인식", "5 stars": "긍정적 인식"
     }
 
-    for text in texts:
-        result = classifier(text)[0]
+    # 배치 처리
+    results = classifier(texts)
+    for result in results:
         sentiment = label_map.get(result["label"], "중립")
         result_counts[sentiment] += 1
 
     return result_counts
 
+
+
 def visualize_sentiment(result_counts, title):
     sizes = list(result_counts.values())
     labels = list(result_counts.keys())
     colors = ["#8fb4eb", "#4E5362", "#b0b1b6"]
-    
+
     if sum(sizes) == 0:
         print(f"⚠️ [{title}] 감정 분석 결과가 없습니다.")
         return
 
-    plt.figure(figsize=(6, 6))
-    plt.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%', startangle=140)
-    plt.title(f"[{title}] 댓글 감정 분석 결과")
-    plt.axis('equal')
-    plt.show()
+    fig = px.pie(
+        names=labels,
+        values=sizes,
+        color=labels,
+        color_discrete_sequence=colors,
+        title=f"[{title}] 댓글 감정 분석 결과"
+    )
+
+    fig.update_traces(textinfo="label+percent", hole=0.3)
+    fig.update_layout(
+    font=dict(family="NanumGothic", size=16, color="black"),
+    showlegend=True
+    )
+
+
+    fig.show()  
 
 
 # 드라이버 설정
@@ -151,18 +175,89 @@ options.add_argument("--disable-blink-features=AutomationControlled")  # 봇 차
 options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
 driver = webdriver.Chrome(options=options)
 
+session = SessionLocal()
+
+# 뉴스 URL 중 아직 분석되지 않은 bill_id 만 수집
+subquery = session.query(NewsSentiment.bill_id).subquery()
+
+raw_results = (
+    session.query(BillNews.news_url)
+    .join(Bill, BillNews.bill_id == Bill.id)
+    .filter(~BillNews.bill_id.in_(subquery))  # 분석되지 않은 뉴스만
+    .filter(BillNews.news_url != "(없음)")
+    .order_by(BillNews.comment_count.desc())
+    .distinct()
+    .all()
+)
+
+# 중복 제거 & 최대 SIZE개 수집
+seen = set()
+urls = []
+for row in raw_results:
+    url = row.news_url.strip()
+    if url in seen:
+        continue
+    seen.add(url)
+
+    # 분석 여부 확인
+    bill_row = (
+        session.query(Bill.id, Bill.title)
+        .join(BillNews, Bill.id == BillNews.bill_id)
+        .filter(BillNews.news_url == url)
+        .first()
+    )
+
+    if not bill_row:
+        continue
+
+    bill_id = bill_row.id
+    if is_sentiment_already_analyzed(bill_id, url):
+        continue
+
+    urls.append(url)
+    if len(urls) == SIZE:
+        break
+
+
+
 for url in urls:
     comment_url = get_comment_url(url)
     print(f"\n🔗 기사 URL: {url}")
+
+    # 🔍 bill_id, title 조회
+    bill_row = (
+        session.query(Bill.id, Bill.title)
+        .join(BillNews, Bill.id == BillNews.bill_id)
+        .filter(BillNews.news_url == url)
+        .first()
+    )
+    
+    if not bill_row:
+        print("⚠️ 해당 뉴스 URL이 DB에 없습니다. 건너뜀.")
+        continue
+
+    bill_id = bill_row.id
+    title = bill_row.title
+
+    # ✅ 이미 분석된 뉴스는 스킵
+    if is_sentiment_already_analyzed(bill_id, url):
+        print(f"⏭️ 이미 분석된 뉴스: {bill_id} - {title}")
+        continue
 
     try:
         comments = load_comments(driver, comment_url)
         print(f"  📥 수집된 댓글 수: {len(comments)}")
 
         sentiment_results = analyze_sentiment(comments)
-        visualize_sentiment(sentiment_results, title=url)
+
+        # ✅ 분석 결과 DB 저장
+        insert_sentiment_result(bill_id, title, url, sentiment_results)
+
+        # ✅ 시각화
+        # visualize_sentiment(sentiment_results, title=title) 확인용 코드*
 
     except Exception as e:
         print(f"❌ 오류 발생: {e}")
 
+session.close()
 driver.quit()
