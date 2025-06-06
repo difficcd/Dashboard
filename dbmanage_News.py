@@ -15,15 +15,17 @@ Base = declarative_base()
 engine = create_engine(DATABASE_URL, echo=False)
 SessionLocal = sessionmaker(bind=engine)
 
-# 뉴스링크 저장 테이블 저장
+
+# 뉴스링크 저장 테이블 
 class BillNews(Base):
     __tablename__ = "bill_news"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    bill_id = Column(Integer, nullable=False)  # bills.id를 외래키로 연결해도 좋음
+    title = Column(String)
+    bill_id = Column(Integer, nullable=False)  
     news_title = Column(String, nullable=False)
     news_url = Column(String, nullable=False)
     comment_count = Column(Integer, default=0)
-    similarity = Column(String, default="0.0")  # float으로 해도 무방
+    similarity = Column(String, default="0.0")  
     body = Column(Text, nullable=True) 
 
     __table_args__ = (
@@ -31,21 +33,46 @@ class BillNews(Base):
     )
 
 
-# 법안 테이블 정의
+# 법안 테이블
 class Bill(Base):
     __tablename__ = "bills"
     id = Column(Integer, primary_key=True, autoincrement=True)
-    year = Column(Integer, nullable=False)  # 변경: age → year
     title = Column(String, nullable=False)
+    year = Column(Integer, nullable=False) 
     __table_args__ = (UniqueConstraint("year", "title", name="uix_year_title"),)
     propose_date = Column(Date, nullable=True)  
+
+
+# bill_news 의 db 에 법안명 추가하도록 함 
+def update_missing_titles():
+    session = SessionLocal()
+    try:
+        count = 0
+        # title이 NULL이거나 빈 문자열인 경우 찾기
+        news_entries = session.query(BillNews).filter(
+            (BillNews.title.is_(None)) | (BillNews.title == "")
+        ).all()
+
+        for news in news_entries:
+            bill = session.query(Bill).filter_by(id=news.bill_id).first()
+            if bill:
+                news.title = bill.title
+                count += 1
+        session.commit()
+        print(f"✅ 누락된 title {count}건 업데이트 완료")
+    except Exception as e:
+        print(f"❌ title 업데이트 중 오류 발생: {e}")
+        session.rollback()
+    finally:
+        session.close()
+
 
 
 
 def update_news_body(bill_id: int, news_url: str, body_text: str):
     session = SessionLocal()
     try:
-        news_url = news_url.strip()  # 정규화 제거
+        news_url = news_url.strip() 
         news = session.query(BillNews).filter_by(bill_id=bill_id, news_url=news_url).first()
         if news:
             news.body = body_text
@@ -191,7 +218,7 @@ def init_db():
     else:
         print("[INFO] DB 파일 있음 → 테이블은 생성되지 않았을 수 있음. create_all 실행.")
 
-    # ✅ 이 부분이 핵심: 존재하는 테이블은 무시하고, 없는 테이블은 생성됨
+    # 존재하는 테이블은 무시하고, 없는 테이블은 생성됨
     Base.metadata.create_all(bind=engine)
 
     print(f"[DEBUG] os.getcwd(): {os.getcwd()}")
@@ -213,7 +240,7 @@ def insert_bill_news(bill_title, year, news_title, news_url, comment_count, simi
         parsed = urllib.parse.urlparse(news_url)
         clean_url = f"{parsed.scheme}://{parsed.netloc}{parsed.path}"
 
-        # ✅ 3. 중복 확인
+        # 3. 중복 확인
         exists = session.query(BillNews).filter_by(bill_id=bill.id, news_url=clean_url).first()
         if exists:
             print(f"[중복 스킵] 이미 저장된 뉴스입니다 → {bill_title} / {clean_url}")
