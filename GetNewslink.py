@@ -19,7 +19,8 @@ from dbmanage_News import (
     get_news_by_bill_title,
     is_news_exist,
     is_exact_news_exist,
-    insert_no_news_placeholder
+    insert_no_news_placeholder,
+    update_missing_titles
     )
 
 
@@ -230,6 +231,9 @@ def process_title(index: int, title: str, year: int):
 if __name__ == "__main__":
     init_db()
 
+    update_missing_titles()
+    # bill_news 에 bills 의 title 칼럼에서 법안명 가져옴 (db 데이터 무결성 확인용)
+
     for year in YEARS:
         print(f"\n==================== {year}년 법안 ====================")
         titles = get_bills_by_year(year)
@@ -299,9 +303,9 @@ if __name__ == "__main__":
 
 
     collect_and_store_missing_bodies() # 일단 1000개로 예상
-    print("\n 본문 db 저장 완료* ")
+    print("\n본문 db 저장 완료")
 
-    
+
 
         
 
