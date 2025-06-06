@@ -5,7 +5,7 @@ import urllib.parse
 from dbmanage_News import SessionLocal, BillNews, update_news_body
 # 파일 기준 import 경로 조정
 
-# 본문 따옴
+
 def get_article_body(url: str) -> str:
     try:
         headers = {
@@ -15,19 +15,25 @@ def get_article_body(url: str) -> str:
         res.raise_for_status()
         soup = BeautifulSoup(res.text, "html.parser")
 
-        # 네이버 뉴스 기준
-        article = soup.find("div", id="newsct_article")
-        if article:
-            return article.get_text(strip=True)
+        article = soup.find("div", id="newsct_article") or soup.find("div", class_="article_body")
 
-        # 백업: 다른 구조
-        article_alt = soup.find("div", class_="article_body")
-        if article_alt:
-            return article_alt.get_text(strip=True)
+        if article:
+            # <br>을 줄바꿈으로 바꾸기
+            for br in article.find_all("br"):
+                br.replace_with("\n")
+
+            # 전체 텍스트 가져오기 (태그 무시)
+            text = article.get_text()
+            # 연속 개행 정리
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            return "\n\n".join(lines)
 
         return "[본문 없음]"
+
     except Exception as e:
         return f"[오류: {e}]"
+
+
 
 
 # 본문이 없으면 수집해서 본문을 db에저장, 있으면 skip (선택 자체)
@@ -60,6 +66,6 @@ def collect_and_store_missing_bodies(limit: int = 10000):
         session.close()
 
 
-#if __name__ == "__main__":
-#    collect_and_store_missing_bodies() 
+if __name__ == "__main__":
+    collect_and_store_missing_bodies() 
 
