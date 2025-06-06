@@ -6,12 +6,22 @@ from transformers import pipeline
 import plotly.express as px
 import plotly.io as pio
 import time
-from dbmanage_News import SessionLocal, BillNews
+from dbmanage_News import SessionLocal, BillNews, Bill
+from dbmanage_NewsReact import (
+    NewsSentiment,
+    init_sentiment_table,  # 테이블 자동 생성 보장
+    insert_sentiment_result,
+    is_sentiment_already_analyzed
+)
 
+
+
+init_sentiment_table()
 
 session = SessionLocal()
+classifier = pipeline("sentiment-analysis", model="nlptown/bert-base-multilingual-uncased-sentiment")
 
-SIZE = 10
+SIZE = 10 # 10개씩 새로 가져옴
 raw_results = (
     session.query(BillNews.news_url)
     .filter(BillNews.news_url != "(없음)")
@@ -120,12 +130,15 @@ def analyze_sentiment(comments):
         "4 stars": "긍정적 인식", "5 stars": "긍정적 인식"
     }
 
-    for text in texts:
-        result = classifier(text)[0]
+    # 배치 처리
+    results = classifier(texts)
+    for result in results:
         sentiment = label_map.get(result["label"], "중립")
         result_counts[sentiment] += 1
 
     return result_counts
+
+
 
 def visualize_sentiment(result_counts, title):
     sizes = list(result_counts.values())
@@ -162,18 +175,72 @@ options.add_argument("--disable-blink-features=AutomationControlled")  # 봇 차
 options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36")
 driver = webdriver.Chrome(options=options)
 
+session = SessionLocal()
+
+# 뉴스 URL 중 아직 분석되지 않은 bill_id 만 수집
+subquery = session.query(NewsSentiment.bill_id).subquery()
+
+raw_results = (
+    session.query(BillNews.news_url)
+    .join(Bill, BillNews.bill_id == Bill.id)
+    .filter(~BillNews.bill_id.in_(subquery))  # 분석되지 않은 뉴스만
+    .filter(BillNews.news_url != "(없음)")
+    .order_by(BillNews.comment_count.desc())
+    .distinct()
+    .all()
+)
+
+# 중복 제거 & 최대 SIZE개 수집
+seen = set()
+urls = []
+for row in raw_results:
+    url = row.news_url.strip()
+    if url not in seen:
+        seen.add(url)
+        urls.append(url)
+    if len(urls) == SIZE:
+        break
+
+
+
 for url in urls:
     comment_url = get_comment_url(url)
     print(f"\n🔗 기사 URL: {url}")
+
+    # 🔍 bill_id, title 조회
+    bill_row = (
+        session.query(Bill.id, Bill.title)
+        .join(BillNews, Bill.id == BillNews.bill_id)
+        .filter(BillNews.news_url == url)
+        .first()
+    )
+    
+    if not bill_row:
+        print("⚠️ 해당 뉴스 URL이 DB에 없습니다. 건너뜀.")
+        continue
+
+    bill_id = bill_row.id
+    title = bill_row.title
+
+    # ✅ 이미 분석된 뉴스는 스킵
+    if is_sentiment_already_analyzed(bill_id, url):
+        print(f"⏭️ 이미 분석된 뉴스: {bill_id} - {title}")
+        continue
 
     try:
         comments = load_comments(driver, comment_url)
         print(f"  📥 수집된 댓글 수: {len(comments)}")
 
         sentiment_results = analyze_sentiment(comments)
-        visualize_sentiment(sentiment_results, title=url)
+
+        # ✅ 분석 결과 DB 저장
+        insert_sentiment_result(bill_id, title, url, sentiment_results)
+
+        # ✅ 시각화
+        visualize_sentiment(sentiment_results, title=title)
 
     except Exception as e:
         print(f"❌ 오류 발생: {e}")
 
+session.close()
 driver.quit()
