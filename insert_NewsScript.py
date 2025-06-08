@@ -1,3 +1,4 @@
+
 from bs4 import BeautifulSoup
 import requests
 import urllib.parse
@@ -5,6 +6,17 @@ import urllib.parse
 from dbmanage_News import SessionLocal, BillNews, update_news_body
 # 파일 기준 import 경로 조정
 
+def collect_body_for_url(bill_id: int, news_url: str, news_title: str = ""):
+    from dbmanage_News import update_news_body
+
+    print(f"[단일 수집] {news_title} ({news_url})")
+    body_text = get_article_body(news_url)
+    if body_text.startswith("[오류:"):
+        print(f"❌ 본문 수집 실패: {body_text}")
+    else:
+        print(f"✅ 본문 수집 완료 (길이: {len(body_text)}자)")
+        update_news_body(bill_id, news_url, body_text)
+        
 
 def get_article_body(url: str) -> str:
     try:
