@@ -10,7 +10,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Lock
-from insert_NewsScript import collect_and_store_missing_bodies
 from dbmanage_News import (
     get_bills_by_year,
     insert_bill_by_year, 
@@ -32,7 +31,7 @@ best_articles_by_title = {}
 API_KEY = "68da180a494a4cc3b8add2071dc95242"
 client_id = "CKb4pAJ84D6tVcCvpjka"
 client_secret = "5PucVvnteo"
-YEARS = list(range(2025, datetime.now().year + 1))  # 2016 ~ 올해
+YEARS = list(range(2025, datetime.now().year + 1))  #  올해
 MAX_WORKERS = 8  # 병렬 스레드 개수 : 6~8 추천
 
 # 임베딩 모델 (스레드 안전)
@@ -127,7 +126,7 @@ def get_comment_count(news_url: str, driver: webdriver.Chrome) -> int:
         return 0
 
 
-def search_news_unique(title: str, sim_threshold: float = 0.0): 
+def search_news_unique(title: str, sim_threshold: float = 0.7): 
     # 네이버 뉴스 검색기능이 관련성을 어느정도 보장하므로 0.0 으로 유사도기준 완화
     # 반대 의미의 기사일 경우에만 걸러내도록 함 (거의 X)
 
@@ -227,12 +226,9 @@ def process_title(index: int, title: str, year: int):
 
 
 
-
-if __name__ == "__main__":
+def run_news_collection():
     init_db()
-
     update_missing_titles()
-    # bill_news 에 bills 의 title 칼럼에서 법안명 가져옴 (db 데이터 무결성 확인용)
 
     for year in YEARS:
         print(f"\n==================== {year}년 법안 ====================")
@@ -254,8 +250,6 @@ if __name__ == "__main__":
             print(f"[DB 저장 결과] 시도: {len(titles)}, 성공: {saved}, 스킵: {skipped}")
 
         title_to_index = {}
-
-        # 아직 처리되지 않은 법안만 필터링
         titles_without_news = []
         for idx, title in enumerate(titles):
             title_to_index[title] = idx
@@ -264,9 +258,7 @@ if __name__ == "__main__":
             if not exists:
                 titles_without_news.append(title)
 
-        # DB에서 이미 뉴스가 저장된 법안에 대한 출력
-        printed_idx = 1  # 1부터 시작하는 출력용 인덱스
-
+        printed_idx = 1
         for title in set(titles) - set(titles_without_news):
             news_list = get_news_by_bill_title(title, year)
             for news_title, news_url in news_list:
@@ -274,7 +266,6 @@ if __name__ == "__main__":
                 print(f"[{printed_idx:03}] {title} → 🔎 뉴스기사 링크 : {news_url}")
                 printed_idx += 1
 
-        # 🔄 저장되지 않은 뉴스는 병렬 처리
         if titles_without_news:
             with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
                 futures = [
@@ -289,7 +280,6 @@ if __name__ == "__main__":
                         import traceback
                         traceback.print_exc()
 
-        # 결과 요약 출력
         for title in titles:
             article = best_articles_by_title.get(title)
             if article:
@@ -298,14 +288,6 @@ if __name__ == "__main__":
                     print(f"\n   ✅ {best_title} ({c_cnt}개, 유사도 {sim:.3f})")
                     print(f"{title} → 🔎 최다 댓글 뉴스기사 링크 : {url}")
 
-
         time.sleep(2)
 
-
-    collect_and_store_missing_bodies() # 일단 1000개로 예상
     print("\n본문 db 저장 완료")
-
-
-
-        
-
