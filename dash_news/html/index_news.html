@@ -1,14 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
   <meta charset="UTF-8">
+  <title>법안 관련 기사/여론분석</title>
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="./vars.css">
   <link rel="stylesheet" href="/static/style.css">
-  
-
-
 
   <style>
    a,
@@ -36,183 +34,339 @@
        margin: 0;
        padding: 0;
    }
+
+    .icon {
+      width: 60px;
+      height: 60px;
+      background: url('/static/frame-1600.svg') no-repeat center;
+      background-size: 60px 60px;
+      border: none;
+    }
+    
+    .home-icon {
+      margin-top: -15px;
+      margin-right: 15px;
+      width: 40px;
+      height: 40px;
+      background: url('/static/frame-1610.svg');
+      border: none;
+    }
+
+
    </style>
   <title>Document</title>
 </head>
+
 <body>
   <div class="div">
-    <div class="div3">
-      <div class="div4"></div>
-      <div class="rectangle-1215">
-        <div class="article-container">
-          <pre style="white-space: pre-wrap; font-family: 'Inter-Regular', sans-serif;">
-      {{ article_html }}
-          </pre>
+    <div class="div2">
+      <div class="div3">
+        <div class="div4">
+          <div class="boardname">DASHBOARD</div>
+          <div class="div5">
+            <!--<div class="item-1"><div class="div6"><a href="/dashboard">메인 대시보드</a></div></div>
+            <div class="item-2"><div class="div7"><a href="/plenary">본회의 법안정보</a></div></div>
+            <div class="item-4 active"><div class="div8"><a href="/legislation_notice">입법예고</div></div>
+            <div class="item-5"><div class="div9"><a href="/foreign_legislation">국외 입법정보</a></div></div>
+            <div class="item-6"><div class="div10"><a href="/public_opinion">법안 여론분석</a></div></div>-->
+
+            <div class="item-1"><div class="div6">메인 대시보드</div></div>
+            <div class="item-2"><div class="div7">본회의 법안정보</div></div>
+            <div class="item-4"><div class="div8">입법예고</div></div>
+            <div class="item-5"><div class="div9">국외 입법정보</div></div>
+            <div class="item-6 active"><div class="div10">법안 여론분석</div></div>
+          </div>
         </div>
       </div>
-      <div class="div5">
-        <img class="rectangle-1184" src="/static/rectangle-11840.svg" />
-        <img class="rectangle-1182" src="/static/rectangle-11820.svg" />
-        <img class="rectangle-1185" src="/static/rectangle-11850.svg" />
-        <div class="div6">
-          한동훈씨... 급했던 모습을 전 아직 기억합니다... 정말로 국민을 먼저
-          바란다면 쌓아가시고, 보여주세요 안 그러면 지지 못합니다 우선 뜻을 같이
-          하는 사람을 모아보시죠 <!-- 댓글은 일단 유지 -->
+    </div>
+
+
+    <div class="container">
+      <div class="left-section">
+        <div class="rectangle-1244"></div>
+        <h2 class="page-title">법안 관련 기사/여론분석</h2>
+        <div class="icon"></div>
+        <div style="color:#666666; font-size: 20px; margin-left: 15px;">
+        법안과 관련된 뉴스에 대한 여론을 분석하여 그래프를 통해 제공합니다.
+        </br>뉴스기사 연관성과 댓글 감정분석 결과에는 다소 오차가 존재합니다.
         </div>
-        <!--<div class="_52-37-10-5">
-          총 댓글건수 52건
-          <br />
-          부정적 댓글 37건 긍정적 댓글 10건 중립적 댓글 5건
-        </div>--> <!-- 프레임 문제로 여론분석 쪽으로 이동 --> 
-        <div class="_30-40-65">
-          보험료 더 내고 소득대체율 그대로하는 게 부담 더는 건가요? 재정만
-          생각할거면 지금 연금수급자 소득대체율 낮춰요. 근데 표 떨어질까봐 못하니
-          젊은세대의 30-40년 후를 들먹이는 거잖아요. 차라리 노인일자리 만들어서
-          65세이상도 납부가능하도록 하고 더 내는 사람들은 연금급여를 조금 더
-          높이든가 하는 방안을 내야죠.
-        </div>
-        <img class="frame-164" src="/static/frame-1640.svg" />
-        <img class="frame-163" src="/static/frame-1630.svg" />
-        <div class="div7">
-          오직 국민과 청년들 챙기는건 한동훈이 유일하다 이렇게 똑똑하고 깨끗하며
-          애국심 많은 한동훈이 최고의정치인
-        </div>
-        <img class="frame-167" src="/static/frame-1670.svg" />
       </div>
+
+    
+      <div class="breadcrumb">
+        <div class="home-icon"></div>
+        <h2 class="page-info"> > 법안 여론분석 </h2>
+      </div>
+    </div>
+
+              
+
+    <div class="line-13"></div>
+
+    <div class="pagination0">
+      {% if current_page > 1 %}
+        <a class="page-arrow first" href="/index_news?page=1">«</a>
+        <a class="page-arrow prev" href="/index_news?page={{ current_page - 1 }}">‹</a>
+      {% else %}
+        <span class="page-arrow first disabled">«</span>
+        <span class="page-arrow prev disabled">‹</span>
+      {% endif %}
+
+      {% for p in range(start_page, end_page + 1) %}
+        {% if p == current_page %}
+          <span class="page-number active">{{ p }}</span>
+        {% else %}
+          <a class="page-number" href="/index_news?page={{ p }}">{{ p }}</a>
+        {% endif %}
+      {% endfor %}
+
+      {% if current_page < total_pages %}
+        <a class="page-arrow next" href="/index_news?page={{ current_page + 1 }}">›</a>
+        <a class="page-arrow last" href="/index_news?page={{ total_pages }}">»</a>
+      {% else %}
+        <span class="page-arrow next disabled">›</span>
+        <span class="page-arrow last disabled">»</span>
+      {% endif %}
+    </div>
+
+
+
+    <div class="container">
+      <div class="frame-174">
+        <div class="left-section">
+          <div class="div19" style="margin-left: -90px;"> 관련 법안 : {{ title }}</div> <!-- 관련 법안 -->
+          <div class="div20">
+            <div class="search-form">
+              <form method="post" action="/analyze_news" class="search-box">
+                <img src="/static/search1.svg" alt="search" class="search-icon">
+                <input type="text" name="title" class="search-input" 
+                    placeholder="법안명을 입력하세요..." required 
+                    style="outline: none; padding: 8px; width: 200px; border: none; border-radius: 4px; font-size: 16px;" />
+                <button type="submit" class="searchbutton">검색</button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+    </div>
+
+    <div class="div15"> <!--전체 회색 블록-->
         <div class="frame-173">
-          <div class="div9">
-            {{ article_title }} <!--기사 제목-->
+          <div class="div17">
+            {{ article_title | safe }} <!-- 기사 제목 -->
           </div>
           <a href="{{ article_url }}" target="_blank" style="text-decoration: none;">
-            <div class="div10">
+            <div class="div16">
               <div class="div11">기사 링크 바로가기</div>
               <img class="vector" src="/static/vector0.svg" />
             </div>
           </a>
         </div>
-    </div>
-    <div class="div12">
-      <div class="div12">
-        <!-- 차트 자리 -->
-      </div>
-    </div>
-    <div class="_52-37-10-5">
-      총 댓글건수 52건
-      <br />
-      부정적 댓글 37건 긍정적 댓글 10건 중립적 댓글 5건
-    </div>
-    <div class="div13">
-      <div class="div14">
-        <div class="frame-171">
-          <img class="vector4" src="/static/vector3.svg" />
-          <div class="div15">여론분석 통계</div>
+
+        <div class="line-14"></div>
+        
+      <div class="rectangle-1214"> <!--내부 블록-->
+        <div class="rectangle-1215">
+          <div class="article-container">
+            <pre style="white-space: pre-wrap; font-family: 'Inter-Regular', sans-serif; font-size:20px;">
+          {{ article_html }}
+            </pre>
+          </div>
         </div>
-      </div>
-      <div class="frame-170">
-        <div class="frame-169">
-          <img class="frame-162" src="/static/frame-1620.svg" />
-          <div class="div16">댓글 반응</div>
-        </div>
-      </div>
-      <img class="div17" src="/static/div17.svg" />
-    </div>
-    <div class="frame-166">
-      <img class="vector5" src="/static/vector4.svg" />
-      <div class="label-name4">부정</div>
-    </div>
-    <div class="frame-165">
-      <img class="vector6" src="/static/vector5.svg" />
-      <div class="label-name5">긍정</div>
-    </div>
-    <img class="frame-168" src="/static/frame-1680.svg" />
-    <div class="frame-172">
-      <div class="div18">관련 법안 : {{ title }}</div> <!-- 관련 법안 -->
-      <div class="div19">
-        <div class="search">
-          <img class="search2" src="/static/search1.svg" />
-          <div class="label">법안명 검색...</div>
-        </div>
-      </div>
-    </div>
-    <div class="div20">
-      <div class="boardname">BOARDNAME</div>
-      <div class="div21">
-        <div class="item-1">
-          <div class="div22">메인 대시보드</div>
-        </div>
-        <div class="item-2">
-          <div class="div23">본회의 법안정보</div>
-        </div>
-        <div class="item-4">
-          <div class="div24">입법예고</div>
-        </div>
-        <div class="item-5">
-          <div class="div25">국외 입법정보</div>
-        </div>
-        <div class="item-6">
-          <div class="div26">법안 여론분석</div>
-        </div>
-      </div>
-      <div class="div27">
-        <img class="search3" src="/static/search2.svg" />
-        <div class="label2">Search...</div>
-      </div>
-    </div>
-    <img class="frame-160" src="/static/frame-1600.svg" />
-    <div class="div28">
-      <div class="div29">더보기</div>
-      <div class="v">v</div>
-    </div>
-    <div class="div30">법안 관련 기사/여론분석</div>
-    <div class="line-13"></div>
-    <div class="rectangle-1244"></div>
-    <img class="frame-161" src="/static/frame-1610.svg" />
-    <div class="frame-47">
-      <div class="mdi-home-circle"></div>
-      <div class="div31">&gt; 법안 여론분석</div>
-    </div>
-    <div class="div32">
-      <div class="frame-134">
-        <div class="frame-132">
-          <div class="frame-129">
-            <div class="frame-122">
-              <div class="_1">1</div>
+
+        <div class="line-13"></div>
+        
+        <div class="dual-container">
+
+          <!--좌-->
+          <div class="notice-block">
+            <div class="left-section2">
+              <div class="frame-169">
+                <img class="frame-162" src="/static/frame-1620.svg" style="width: 70px; height: 70px; margin-left:20px;" />
+                <div class="div21">댓글 반응</div> 
+              </div>
+              <div class="line-14" style="margin-left: -30px; margin-top:60px;"></div>
             </div>
-          </div>
-          <div class="frame-1222">
-            <div class="_2">2</div>
-          </div>
-          <div class="frame-131">
-            <div class="frame-1223">
-              <div class="_3">3</div>
+            
+            <div class="left-section2" style="margin-left: 500px; margin-top: -30px; margin-bottom: 20px;"> 
+              <img class="frame-162" src="/static/frame-1680.svg" /> 
+                <div class="page-info">긍정</div>
+              <img class="frame-162" src="/static/frame-1670.svg" /> 
+                <div class="page-info">부정</div>
             </div>
-          </div>
-          <div class="frame-1342">
-            <div class="frame-1224">
-              <div class="div33">...</div>
+
+
+            <div id="comment-container">
+              {% for comment in comments %}
+                <div class="left-section comment-box-wrapper" {% if loop.index > 5 %}style="display: none;"{% endif %}>
+                  <img class="frame-164" src="/static/frame-1640.svg" />
+                  
+                  <!-- 댓글 Section -->
+                  <div class="comment-box">
+                    <div class="comment-text">
+                      <strong>{{ comment.author }}</strong> ({{ comment.date }})<br />
+                      </pre>{{ comment.text | safe }}</pre>
+
+                      <div class="comment-meta">
+                        좋아요 수 : {{ comment.like }} | 싫어요 수 : {{ comment.dislike }}
+                        <br />
+                        감정 분석 결과:
+                        <span class="sentiment-wrapper">
+                          {% if comment.sentiment == "긍정적 인식" %}
+                            <span class="sentiment-text positive">{{ comment.sentiment }}</span>
+                          {% elif comment.sentiment == "부정적 인식" %}
+                            <span class="sentiment-text negative">{{ comment.sentiment }}</span>
+                          {% else %}
+                            <span class="sentiment-text neutral">{{ comment.sentiment }}</span>
+                          {% endif %}
+                        </span>
+                      </div>
+                    </div>
+
+                    {% if comment.sentiment in ["긍정적 인식", "부정적 인식"] %}
+                      <img class="sentiment-icon-inline"
+                          src="{% if comment.sentiment == '긍정적 인식' %}/static/frame-1680.svg{% else %}/static/frame-1670.svg{% endif %}" />
+                    {% endif %}
+                  </div>
+                </div>
+              {% endfor %}
             </div>
+
+
+
+
+
+            {% if comments|length > 5 %}
+              <div id="load-more-wrapper" style="text-align: center; margin-top: 30px;">
+      
+                <!-- 선 -->
+                <div style="height: 3px; background-color: #E0E0E0; margin-bottom: 12px;"></div>
+                
+                <!-- 더보기 버튼 -->
+                <div id="load-more-btn" style="cursor: pointer; font-weight: 600; font-size: 14px; color: #555; white-space: nowrap;">
+                  더보기&nbsp;<span style="font-weight: bold;">v</span>
+                </div>
+
+              </div>
+            {% endif %}
+
           </div>
-          <div class="frame-133">
-            <div class="frame-1225">
-              <div class="_10">10</div>
+
+          <!--<div class="_52-37-10-5">
+            총 댓글건수 52건
+            <br />
+            부정적 댓글 37건 긍정적 댓글 10건 중립적 댓글 5건
+          </div>--> <!-- 프레임 문제로 여론분석 쪽으로 이동 --> 
+          
+      
+
+          <!--<img class="frame-167" src="/static/frame-1670.svg" /> 
+          긍정 부정 벡터는 일단 텍스트로 가져오고 나중에 수정-->
+
+
+          <!--우 블럭-->
+          <div class="notice-box">
+            <div class="left-section2">
+              <div class="frame-169" style="margin: 0 100px 50px 0;">
+                <img class="frame-162" src="/static/vector3.svg" style="width: 30px; height: 30px; margin-left:15px; margin-right:15px;" />
+                <div class="div21">여론분석 통계</div> 
+              </div>
+              <div class="line-14" style="margin: 0 10px 50px -300px;  width: 600px;"></div>
             </div>
+
+            
+            
+            <div style="position: relative; height: 500px;">  <!-- 공통 부모 -->
+
+              <!-- h2 텍스트를 iframe 위로 띄우기 -->
+              <h2 style="
+                position: absolute;
+                top: -30px;
+                left: 70px;
+                z-index: 10;
+                color: #4a4a4a;
+                background-color: rgba(255, 255, 255, 0.7);  /* 배경 넣으면 더 잘 보임 */
+                padding: 5px 10px;
+                border-radius: 8px;
+              ">
+                댓글 감정 분석 결과
+              </h2>
+
+              <!-- iframe은 뒤로 -->
+              {% if dash_url_live %}
+                <iframe src="{{ dash_url_live }}" width="100%" height="700" style="border:none; margin-top:20px;"></iframe>
+              {% elif dash_url %}
+                <iframe src="{{ dash_url }}" width="100%" height="700" style="border:none; margin-top:20px;"></iframe>
+              {% endif %}
+
+
+            </div>
+
+
           </div>
+
         </div>
+
+    
       </div>
-      <div class="frame-124">
-        <img class="frame-127" src="/static/frame-1270.svg" />
-      </div>
-      <div class="frame-125">
-        <div class="frame-1242"></div>
-        <img class="vector7" src="/static/vector6.svg" />
-      </div>
-      <img class="frame-126" src="/static/frame-1260.svg" />
-      <div class="frame-1272">
-        <img class="frame-128" src="/static/frame-1280.svg" />
-      </div>
+
     </div>
-  </div>
-  
+
+
+    <div class="pagination">
+      {% if current_page > 1 %}
+        <a class="page-arrow first" href="/index_news?page=1">«</a>
+        <a class="page-arrow prev" href="/index_news?page={{ current_page - 1 }}">‹</a>
+      {% else %}
+        <span class="page-arrow first disabled">«</span>
+        <span class="page-arrow prev disabled">‹</span>
+      {% endif %}
+
+      {% for p in range(start_page, end_page + 1) %}
+        {% if p == current_page %}
+          <span class="page-number active">{{ p }}</span>
+        {% else %}
+          <a class="page-number" href="/index_news?page={{ p }}">{{ p }}</a>
+        {% endif %}
+      {% endfor %}
+
+      {% if current_page < total_pages %}
+        <a class="page-arrow next" href="/index_news?page={{ current_page + 1 }}">›</a>
+        <a class="page-arrow last" href="/index_news?page={{ total_pages }}">»</a>
+      {% else %}
+        <span class="page-arrow next disabled">›</span>
+        <span class="page-arrow last disabled">»</span>
+      {% endif %}
+    </div>
+
+  <div style="height: 200px;"></div>
+
+  <script>
+    const loadMoreBtn = document.getElementById("load-more-btn");
+    let currentVisible = 5;
+
+    if (loadMoreBtn) {
+      loadMoreBtn.addEventListener("click", () => {
+        const allComments = document.querySelectorAll(".comment-box-wrapper");
+        let shown = 0;
+
+        for (let i = currentVisible; i < allComments.length && shown < 5; i++) {
+          allComments[i].style.display = "flex";  // 댓글 블록 보이게
+          shown++;
+          currentVisible++;
+        }
+
+        if (currentVisible >= allComments.length) {
+          loadMoreBtn.style.display = "none";
+        }
+      });
+    }
+  </script>
+
 </body>
+
+
 </html>
+
 
